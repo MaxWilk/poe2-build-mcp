@@ -58,7 +58,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (40 MCP tools)
+### The toolset (41 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -85,6 +85,7 @@ engine confirms the effect.
 
 *Live ops & self-update — network:*
 - `get_prices(query, kind, league?)` — poe2scout currency/unique prices · `list_price_leagues()`
+- `get_meta_builds(league?)` — live ascendancy popularity (poe.ninja; context, not a recommendation)
 - `check_for_updates()` / `apply_updates()` — pull validated engine + corpus releases
 - `check_data_version()` / `update_corpus(rebuild_from_source?)`
 

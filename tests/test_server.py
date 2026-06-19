@@ -27,7 +27,35 @@ def test_workflow_prompts_registered():
 
 def test_tool_surface_intact():
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 40
+    assert len(tools) == 41
+
+
+def test_meta_builds_shape():
+    # Network-free: exercise the league selection + formatting on a sample payload.
+    from server.live import meta
+
+    sample = {
+        "leagueBuilds": [
+            {
+                "leagueName": "Runes of Aldur",
+                "leagueUrl": "runesofaldur",
+                "total": 124269,
+                "statistics": [
+                    {"class": "Martial Artist", "percentage": 24.5, "trend": 1},
+                    {"class": "Spirit Walker", "percentage": 17.7, "trend": -1},
+                ],
+            },
+            {"leagueName": "HC Runes of Aldur", "total": 5000, "statistics": []},
+            {"leagueName": "Standard", "total": 999999, "statistics": []},
+        ]
+    }
+    r = meta.shape(sample, limit=5)
+    # defaults to the main softcore challenge league, not Standard/HC (despite Standard's total)
+    assert r["ok"] and r["league"] == "Runes of Aldur" and r["sampleSize"] == 124269
+    assert r["ascendancies"][0]["ascendancy"] == "Martial Artist"
+    assert r["ascendancies"][0]["trend"] == "rising" and r["ascendancies"][1]["trend"] == "falling"
+    assert meta.shape(sample, league="Standard")["league"] == "Standard"  # explicit override
+    assert meta.shape(sample, league="Nope")["ok"] is False  # not found
 
 
 def test_build_advice_sections():

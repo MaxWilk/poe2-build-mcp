@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Your AI build companion for Path of Exile 2. Import a build for real Path of Building numbers, theorycraft and optimize upgrades, search items, gems, and uniques, and check live prices — every stat computed by the engine, never guessed.",
   "icon": "assets/icon.png",
   "author": {
@@ -58,6 +58,7 @@
     { "name": "engine_health", "description": "Engine + install diagnostics (liveness, versions, data source)." },
     { "name": "get_prices", "description": "Live currency/unique prices (poe2scout)." },
     { "name": "list_price_leagues", "description": "List PoE2 leagues available for pricing." },
+    { "name": "get_meta_builds", "description": "Live ascendancy popularity from poe.ninja (context, not a recommendation)." },
     { "name": "check_data_version", "description": "Corpus freshness vs upstream." },
     { "name": "update_corpus", "description": "Rebuild the corpus from RePoE locally." },
     { "name": "check_for_updates", "description": "Check for a newer validated release." },

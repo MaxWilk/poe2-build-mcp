@@ -30,10 +30,10 @@ whole point of the connector. The `start_build_session` prompt is a one-click wa
   numbers. Use them to *find* options; use the engine to *value* them. `build_advice` gives
   durable optimization principles (what to change and why); `explain_mechanic` explains a
   specific mechanic — both evergreen, with the engine still computing the actual numbers.
-- **Live (network, may be unavailable):** `get_prices`, `list_price_leagues`,
-  `check_data_version`, `check_for_updates`/`apply_updates`, `update_corpus` (power-user local
-  rebuild). Treat prices as approximate and time-sensitive; if a live call returns
-  "unavailable," carry on and say so.
+- **Live (network, may be unavailable):** `get_prices`, `list_price_leagues`, `get_meta_builds`
+  (ascendancy popularity), `check_data_version`, `check_for_updates`/`apply_updates`,
+  `update_corpus` (power-user local rebuild). Treat these as approximate and time-sensitive; if
+  a live call returns "unavailable," carry on and say so.
 
 When you give an answer, make clear which bucket it came from (e.g. "PoB computes 1.2M DPS"
 vs. "the corpus lists this unique as…" vs. "current Trade price is roughly…").
@@ -42,8 +42,10 @@ vs. "the corpus lists this unique as…" vs. "current Trade price is roughly…"
 
 All compute tools operate on a single in-memory build that persists across calls.
 
-- `import_build` and `set_class` **replace** the active build. `set_class` also re-roots the
-  passive tree at that class's start, so do it *before* searching/allocating passives.
+- `import_build` and `set_class` **replace** the active build. `import_build` accepts a PoB
+  code, a pobb.in/pastebin link, raw PoB XML, **or a local file path** (e.g. a PoB export the
+  user saved). `set_class` also re-roots the passive tree at that class's start, so do it
+  *before* searching/allocating passives.
 - `set_level`, `set_skill`, `set_config`, `equip_item`, `unequip_item`,
   `alloc_passive`/`dealloc_passive` **mutate** the active build in place.
 - Use `get_build` for a full read-back (class, level, skill group, allocated nodes, gear,
@@ -84,6 +86,12 @@ current build. It reports a *requirement*, so confirm it's attainable (`search_m
 - **Stat keys are PoB-internal** (`TotalDPS`, `EnergyShield`, `Life`, `TotalEHP`, `Speed`, …).
   Pass them to `get_build_stats`/`get_defenses` when you need specific values.
 - **Pricing is league-specific.** Use `list_price_leagues` if unsure which league to query.
+- **Meta is context, not a target.** `get_meta_builds` shows what's *popular* on the ladder,
+  not what's best for the player. **Build to the user's stated goal first.** Don't steer every
+  build toward the top ascendancy, and don't volunteer the meta unless it's relevant or asked
+  for — only optimize toward "the meta" when the user explicitly wants the strongest/popular
+  option. When you do cite it, present it as a data point ("X is the most-played ascendancy"),
+  with its sample size, and never as a substitute for their goal or for engine-verified numbers.
 
 ## Boundaries
 

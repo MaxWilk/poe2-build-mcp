@@ -23,6 +23,7 @@ from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, t
 from .knowledge import advice
 from .knowledge import db as corpus
 from .knowledge import mechanics
+from .live import meta as live_meta
 from .live import prices as live_prices
 from .live import update as live_update
 from .live import version as live_version
@@ -65,10 +66,13 @@ def _reset_engine() -> None:
 
 
 def _source_to_xml(source: str) -> str:
-    """Normalize a user-supplied build source (code / link / raw XML) to PoB XML."""
+    """Normalize a user-supplied build source (code / link / raw XML / local file) to PoB XML."""
     src = (source or "").strip()
     if not src:
         raise ValueError("empty build source")
+    # A local PoB export file (XML or a saved share code), e.g. a path into PoB's Builds folder.
+    if len(src) < 500 and "\n" not in src and Path(src).expanduser().is_file():
+        src = Path(src).expanduser().read_text(encoding="utf-8").strip()
     if is_link(src):
         return to_xml(src)
     if "PathOfBuilding" in src and "<" in src:
@@ -507,6 +511,24 @@ def get_prices(
 def list_price_leagues() -> list[dict[str, Any]]:
     """List Path of Exile 2 leagues available for pricing (with the current one flagged)."""
     return live_prices.list_leagues()
+
+
+@mcp.tool()
+def get_meta_builds(league: str | None = None, limit: int = 15) -> dict[str, Any]:
+    """Live ascendancy popularity from poe.ninja's ladder snapshot — CONTEXT, not a target.
+
+    Returns the most-played ascendancies for a league (default the current challenge league)
+    with each one's share % and a rising/falling/flat trend, plus the sample size. This is
+    *popularity among logged ladder characters, not a recommendation* — popular is not the same
+    as optimal or right for the player's goal. Use it to inform, not dictate: build to the
+    user's stated goal, and only steer toward the meta when they explicitly ask for the
+    "strongest"/"popular"/"meta" option. Covers ascendancy distribution only (no skill/item
+    meta). Returns {ok: false} if poe.ninja is unreachable.
+    """
+    try:
+        return live_meta.get_meta_builds(league=league, limit=limit)
+    except live_meta.MetaError as e:
+        return {"ok": False, "error": f"meta data unavailable: {e}"}
 
 
 @mcp.tool()
