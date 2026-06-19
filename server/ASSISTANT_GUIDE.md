@@ -25,8 +25,9 @@ whole point of the connector. The `start_build_session` prompt is a one-click wa
   reachability via `pathDist`) and `engine_health` (engine liveness + installed versions).
 - **Looked-up (corpus, offline & deterministic):** `search_items`/`get_item`,
   `find_skills`/`get_gem`/`find_supports_for`, `search_mods`/`reverse_lookup`,
-  `search_uniques`/`get_unique`, `list_ascendancies`, `explain_mechanic`, `build_advice`,
-  `corpus_info`. These are static game facts, **not** statements about the user's build's
+  `search_uniques`/`get_unique`, `parse_item` (item text → affix tiers + open slots),
+  `list_ascendancies`, `explain_mechanic`, `build_advice`, `corpus_info`. These are static game
+  facts, **not** statements about the user's build's
   numbers. Use them to *find* options; use the engine to *value* them. `build_advice` gives
   durable optimization principles (what to change and why); `explain_mechanic` explains a
   specific mechanic — both evergreen, with the engine still computing the actual numbers.
@@ -67,6 +68,10 @@ before recommending it.
 
 **Tweak / compare:** mutate the active build and read the returned stats, or use `compare_to`
 to A/B against another code and report the deltas.
+
+**Evaluate gear / a drop:** `parse_item(text)` an in-game/PoB item to read each affix's tier
+(T1 = best) and the open prefix/suffix slots — "is this worth using or crafting on?" Then
+`equip_item` it to see the real DPS/EHP change on the engine.
 
 **Hit a target:** to turn a goal into a concrete requirement (e.g. "how much more damage for
 1M DPS?"), use `solve_for(metric, target, lever)` — it root-finds the modifier magnitude on the

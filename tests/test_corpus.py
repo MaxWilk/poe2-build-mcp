@@ -62,6 +62,31 @@ def test_explain_mechanic():
     assert mechanics.explain("nonsense").get("found") is False
 
 
+def test_classify_affix_phys_damage():
+    from server.knowledge import itemparse as ip
+
+    r = ip.classify_affix("118% increased Physical Damage")
+    assert r and r["type"] == "prefix" and r["tierRange"] == "110-134"
+
+
+def test_parse_item_tiers_and_open_slots():
+    from server.knowledge import itemparse as ip
+
+    item = (
+        "Item Class: Body Armours\nRarity: Rare\nTest Plate\nAdvanced Vaal Cuirass\n"
+        "--------\nItem Level: 81\n--------\n+87 to maximum Life\n+35% to Fire Resistance"
+    )
+    r = ip.parse_item(item)
+    assert r["ok"] and r["rarity"] == "Rare" and r["itemLevel"] == 81
+    by = {a["text"]: a for a in r["affixes"]}
+    assert by["+87 to maximum Life"]["type"] == "prefix"
+    assert "85-99" in (by["+87 to maximum Life"]["tierRange"] or "")
+    assert by["+35% to Fire Resistance"]["type"] == "suffix"
+    # rare = 3 prefix / 3 suffix; 1 prefix + 1 suffix used -> 2 / 2 open
+    assert r["prefixes"] == 1 and r["suffixes"] == 1
+    assert r["openPrefixes"] == 2 and r["openSuffixes"] == 2
+
+
 def test_search_mods_precision():
     # Column-scoped match: a stat-text query must not match unrelated mods via stat ids
     # (e.g. "physical damage" was wrongly returning Armour mods).

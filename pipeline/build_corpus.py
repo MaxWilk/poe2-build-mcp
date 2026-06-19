@@ -47,7 +47,7 @@ CREATE TABLE ascendancies(id TEXT PRIMARY KEY, name TEXT, class TEXT, flavour TE
 
 CREATE TABLE mods(
     id TEXT PRIMARY KEY, name TEXT, text TEXT, type TEXT, domain TEXT,
-    required_level INTEGER, tags TEXT, stat_ids TEXT, groups TEXT);
+    required_level INTEGER, tags TEXT, stat_ids TEXT, groups TEXT, ranges TEXT);
 CREATE VIRTUAL TABLE mods_fts USING fts5(mod_id UNINDEXED, name, text, tags, stat_ids);
 
 CREATE TABLE uniques(
@@ -227,10 +227,16 @@ def build() -> dict[str, int]:
         tags = sorted(
             {w["tag"] for w in (m.get("spawn_weights") or []) if w.get("weight") and w.get("tag")}
         )
-        stat_ids = [s.get("id") for s in (m.get("stats") or []) if s.get("id")]
+        stats = m.get("stats") or []
+        stat_ids = [s.get("id") for s in stats if s.get("id")]
+        ranges = [
+            {"id": s.get("id"), "min": s.get("min"), "max": s.get("max")}
+            for s in stats
+            if s.get("id")
+        ]
         cur.execute(
-            "INSERT INTO mods(id,name,text,type,domain,required_level,tags,stat_ids,groups) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO mods(id,name,text,type,domain,required_level,tags,stat_ids,groups,ranges) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
             (
                 mid,
                 m.get("name"),
@@ -241,6 +247,7 @@ def build() -> dict[str, int]:
                 json.dumps(tags),
                 json.dumps(stat_ids),
                 json.dumps(m.get("groups") or []),
+                json.dumps(ranges),
             ),
         )
         cur.execute(
@@ -274,7 +281,7 @@ def build() -> dict[str, int]:
     }
     for key, value in {
         "source": BASE,
-        "schema_version": "2",
+        "schema_version": "3",
         "counts": json.dumps(counts),
         "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }.items():

@@ -22,6 +22,7 @@ from .compute import solver
 from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, to_xml
 from .knowledge import advice
 from .knowledge import db as corpus
+from .knowledge import itemparse
 from .knowledge import mechanics
 from .live import meta as live_meta
 from .live import prices as live_prices
@@ -434,6 +435,20 @@ def build_advice(topic: str = "") -> dict[str, Any]:
     for deciding what to change; the actual DPS/EHP numbers still come from the compute tools.
     """
     return advice.advise(topic)
+
+
+@mcp.tool()
+def parse_item(text: str) -> dict[str, Any]:
+    """Parse a Path of Exile 2 item (in-game clipboard or PoB item text) and enrich it.
+
+    For each explicit affix, identifies its mod group and the **tier it rolled (T1 = best)**
+    using the corpus' per-tier ranges, and reports **open prefix/suffix slots** for craftable
+    rarities. Use it to evaluate a drop or plan a craft ("is this worth using / can I add
+    more?"). Tiers and ranges are looked-up corpus facts — to see how the item changes a build,
+    equip it with `equip_item`. Affix detection is best-effort; unmatched lines come back under
+    `unrecognized`.
+    """
+    return itemparse.parse_item(text)
 
 
 @mcp.tool()

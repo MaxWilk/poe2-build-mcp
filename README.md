@@ -58,7 +58,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (41 MCP tools)
+### The toolset (42 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -81,6 +81,7 @@ engine confirms the effect.
 - `explain_mechanic(topic)` — concise mechanics references (resistances, ailments, spirit, EHP, …)
 - `search_mods(query, item_tag?, mod_type?)` / `reverse_lookup(stat)`
 - `search_uniques(query, item_type?)` / `get_unique(name)`
+- `parse_item(text)` — parse an item's text → affix tiers (T1=best) + open prefix/suffix slots
 - `list_ascendancies(character?)` / `corpus_info()`
 
 *Live ops & self-update — network:*

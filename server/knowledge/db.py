@@ -247,6 +247,35 @@ def search_mods(
     ]
 
 
+def mods_for_text(query: str, limit: int = 80) -> list[dict]:
+    """Candidate affixes matching the readable words in `query`, with tier ranges.
+
+    Used by the item parser to find a rolled affix's tier ladder. Returns each mod's text,
+    type (prefix/suffix), required_level, groups, and per-stat ranges.
+    """
+    con = _conn()
+    base = (
+        "SELECT m.text, m.type, m.required_level, m.groups{cols} "
+        "FROM mods_fts f JOIN mods m ON m.id = f.mod_id WHERE mods_fts MATCH ? LIMIT ?"
+    )
+    try:  # `ranges` was added in schema v3; tolerate an older auto-updated corpus
+        rows = con.execute(base.format(cols=", m.ranges"), (_match_cols(query, ("text",)), limit))
+        has_ranges = True
+    except sqlite3.OperationalError:
+        rows = con.execute(base.format(cols=""), (_match_cols(query, ("text",)), limit))
+        has_ranges = False
+    return [
+        {
+            "text": r["text"],
+            "type": r["type"],
+            "required_level": r["required_level"],
+            "groups": json.loads(r["groups"] or "[]"),
+            "ranges": json.loads(r["ranges"] or "[]") if has_ranges else [],
+        }
+        for r in rows
+    ]
+
+
 def reverse_lookup(stat: str, limit: int = 30) -> dict[str, list[dict]]:
     """Find sources of a stat across mods, gems, and uniques (by readable text)."""
     con = _conn()
