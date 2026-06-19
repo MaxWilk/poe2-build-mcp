@@ -505,27 +505,45 @@ function methods.search_passives(p)
 	end
 	local wantType = p.node_type
 	local limit = p.limit or 30
-	local res = {}
+	-- Rank by how many query terms match (name + ascendancy + stat text), so multi-word and
+	-- conceptual queries return the best partial matches instead of nothing. No query => browse.
+	local scored = {}
 	for _, node in pairs(build.spec.nodes) do
 		if node.name and node.type ~= "ClassStart" and node.type ~= "AscendClassStart" then
 			if (not wantType) or node.type == wantType then
 				local hay = node.name:lower()
+				if node.ascendancyName then
+					hay = hay .. " " .. node.ascendancyName:lower()
+				end
 				if node.sd then
 					hay = hay .. " " .. table.concat(node.sd, " "):lower()
 				end
-				local ok = true
+				local score = 0
 				for _, t in ipairs(terms) do
-					if not hay:find(t, 1, true) then
-						ok = false
-						break
+					if hay:find(t, 1, true) then
+						score = score + 1
 					end
 				end
-				if ok then
-					res[#res + 1] = nodeSummary(node)
-					if #res >= limit then break end
+				if #terms == 0 or score > 0 then
+					scored[#scored + 1] = { node = node, score = score }
 				end
 			end
 		end
+	end
+	-- most matched terms first, then reachable (lowest pathDist), then name for a stable order
+	table.sort(scored, function(a, b)
+		if a.score ~= b.score then
+			return a.score > b.score
+		end
+		local pa, pb = a.node.pathDist or 1e9, b.node.pathDist or 1e9
+		if pa ~= pb then
+			return pa < pb
+		end
+		return (a.node.name or "") < (b.node.name or "")
+	end)
+	local res = {}
+	for i = 1, math.min(limit, #scored) do
+		res[#res + 1] = nodeSummary(scored[i].node)
 	end
 	return { results = res }
 end

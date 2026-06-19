@@ -44,6 +44,24 @@ def test_set_class_and_ascendancy(engine):
     assert op["finalValue"] > op["startValue"]
 
 
+def test_search_passives_ascendancy_and_partial(engine):
+    engine.new_build()
+    engine.set_class("Mercenary", "Witchhunter")
+    # ascendancy name is now searchable -> returns that ascendancy's nodes
+    asc = engine.search_passives(query="Witchhunter")["results"]
+    assert asc and all(n.get("ascendancy") == "Witchhunter" for n in asc)
+    # multi-word/conceptual query returns ranked partial matches (used to AND to []):
+    multi = engine.search_passives(query="explode on death fire damage", limit=10)["results"]
+    assert multi
+
+
+def test_search_passives_reachable_first(fireball):
+    # with no query, browse mode ranks reachable nodes (lowest pathDist) first
+    res = fireball.search_passives(node_type="Notable", limit=50)["results"]
+    dists = [n["pathDist"] for n in res if n.get("pathDist") is not None]
+    assert dists == sorted(dists)
+
+
 def test_set_class_unknown_lists_valid_options(engine):
     engine.new_build()
     bad_cls = engine.set_class("Notaclass")
