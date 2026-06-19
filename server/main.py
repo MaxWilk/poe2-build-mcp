@@ -14,6 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from .compute.engine import PobEngine
 from .compute.pob_code import decode_code, encode_code, is_link, to_xml
 from .knowledge import db as corpus
+from .knowledge import mechanics
 from .live import prices as live_prices
 from .live import update as live_update
 from .live import version as live_version
@@ -326,6 +327,22 @@ def find_skills(
 def get_gem(name_or_id: str) -> dict[str, Any] | None:
     """Return full data for a single gem by name or id (tags, granted skills, supports, types)."""
     return corpus.get_gem(name_or_id)
+
+
+@mcp.tool()
+def find_supports_for(skill: str, limit: int = 25) -> dict[str, Any]:
+    """Find support gems for a skill: its curated recommendations plus tag-compatible supports."""
+    return corpus.find_supports_for(skill, limit=limit)
+
+
+@mcp.tool()
+def explain_mechanic(topic: str) -> dict[str, Any]:
+    """Explain a Path of Exile 2 mechanic (concise reference).
+
+    Topics include: resistances, ailments, armour, evasion, energy_shield, spirit,
+    critical_strike, ehp, accuracy, recovery. Returns the available topic list if not found.
+    """
+    return mechanics.explain(topic)
 
 
 @mcp.tool()

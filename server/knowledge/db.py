@@ -153,6 +153,27 @@ def find_skills(
     ]
 
 
+def find_supports_for(skill: str, limit: int = 25) -> dict:
+    """Find support gems for a skill: its curated recommendations plus tag-compatible supports."""
+    gem = get_gem(skill)
+    if not gem:
+        return {"skill": skill, "found": False}
+    generic = {"support", "grants_active_skill"}
+    skill_tags = set(gem["tags"]) - generic
+    con = _conn()
+    compatible = []
+    for r in con.execute("SELECT name, tags FROM gems WHERE gem_type = 'support' ORDER BY name"):
+        shared = skill_tags & (set(json.loads(r["tags"])) - generic)
+        if shared:
+            compatible.append({"name": r["name"], "matches": sorted(shared)})
+    return {
+        "skill": gem["name"],
+        "tags": sorted(skill_tags),
+        "recommended": gem["supports"],
+        "compatible": compatible[:limit],
+    }
+
+
 def get_gem(name_or_id: str) -> dict | None:
     con = _conn()
     row = con.execute(

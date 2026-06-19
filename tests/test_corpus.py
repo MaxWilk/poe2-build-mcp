@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from server.knowledge import db
+from server.knowledge import db, mechanics
 
 pytestmark = pytest.mark.skipif(
     not db.db_path().exists(),
@@ -48,6 +48,18 @@ def test_get_unique():
     u = db.get_unique("Andvarius")
     assert u and "Gold Ring" in u["base"]
     assert "Rarity" in u["text"]
+
+
+def test_find_supports_for():
+    fs = db.find_supports_for("Detonate Living")
+    assert fs["recommended"]
+    assert isinstance(fs["compatible"], list)
+
+
+def test_explain_mechanic():
+    assert "75%" in mechanics.explain("resistances")["text"]
+    assert mechanics.explain("Spirit")["topic"] == "spirit"  # case/fuzzy
+    assert mechanics.explain("nonsense").get("found") is False
 
 
 def test_search_mods_precision():
