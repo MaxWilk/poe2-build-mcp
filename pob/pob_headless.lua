@@ -114,6 +114,60 @@ function methods.new_build()
 	return { stats = collectStats() }
 end
 
+-- Set the character class and (optionally) ascendancy, re-rooting the passive tree at that
+-- class's start so search/alloc/optimize work for the right class.
+function methods.set_class(p)
+	assert(p and p.class, "set_class requires params.class")
+	local spec = build.spec
+	local tree = spec.tree
+
+	local classId = tree.classNameMap[p.class]
+	if not classId then
+		local want = tostring(p.class):lower()
+		for name, id in pairs(tree.classNameMap) do
+			if name:lower() == want then
+				classId = id
+				break
+			end
+		end
+	end
+	if not classId then
+		return { ok = false, error = "unknown class: " .. tostring(p.class) }
+	end
+	spec:SelectClass(classId)
+
+	if p.ascendancy and p.ascendancy ~= "" then
+		local want = tostring(p.ascendancy):lower()
+		local found
+		for aid, asc in pairs(tree.classes[classId].classes) do
+			if asc.name and asc.name:lower() == want then
+				spec:SelectAscendClass(aid)
+				found = asc.name
+				break
+			end
+		end
+		if not found then
+			return {
+				ok = false,
+				error = "unknown ascendancy '"
+					.. tostring(p.ascendancy)
+					.. "' for class "
+					.. tostring(p.class),
+			}
+		end
+	end
+
+	build.buildFlag = true
+	build.modFlag = true
+	runCallback("OnFrame")
+	return {
+		ok = true,
+		class = spec.curClassName,
+		ascendancy = spec.curAscendClassName,
+		stats = collectStats(p.keys),
+	}
+end
+
 function methods.load_build_xml(p)
 	assert(p and p.xml, "load_build_xml requires params.xml")
 	loadBuildFromXML(p.xml, p.name or "imported")

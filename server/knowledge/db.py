@@ -49,6 +49,20 @@ def _match(text: str) -> str:
     return " ".join(f"{t}*" for t in terms) if terms else '""'
 
 
+def _match_cols(text: str, cols: tuple[str, ...]) -> str:
+    """FTS5 prefix-AND query restricted to specific columns.
+
+    Mod rows index readable name/text plus internal stat-id tokens; scoping a stat-text query
+    to {name text} stops it matching unrelated mods via their stat ids (e.g. "physical damage"
+    hitting an Armour mod whose stat id contains "physical_damage_reduction").
+    """
+    terms = re.findall(r"\w+", text.lower())
+    if not terms:
+        return '""'
+    inner = " ".join(f"{t}*" for t in terms)
+    return "{" + " ".join(cols) + "} : (" + inner + ")"
+
+
 def corpus_info() -> dict[str, Any]:
     con = _conn()
     meta = {r["key"]: r["value"] for r in con.execute("SELECT key, value FROM meta")}
@@ -189,7 +203,7 @@ def search_mods(
             "SELECT m.id, m.name, m.text, m.type, m.tags, m.required_level "
             "FROM mods_fts f JOIN mods m ON m.id = f.mod_id WHERE mods_fts MATCH ? "
         )
-        params.append(_match(query))
+        params.append(_match_cols(query, ("name", "text")))
     else:
         sql = "SELECT m.id, m.name, m.text, m.type, m.tags, m.required_level FROM mods m WHERE 1=1 "
     if item_tag:
@@ -216,11 +230,12 @@ def reverse_lookup(stat: str, limit: int = 30) -> dict[str, list[dict]]:
     """Find sources of a stat across mods, gems, and uniques (by readable text)."""
     con = _conn()
     q = _match(stat)
+    qm = _match_cols(stat, ("name", "text"))
     out: dict[str, list[dict]] = {"mods": [], "gems": [], "uniques": []}
     for r in con.execute(
         "SELECT m.name, m.text, m.type, m.tags FROM mods_fts f JOIN mods m ON m.id = f.mod_id "
         "WHERE mods_fts MATCH ? LIMIT ?",
-        (q, limit),
+        (qm, limit),
     ):
         out["mods"].append(
             {

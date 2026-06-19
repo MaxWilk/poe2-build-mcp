@@ -119,6 +119,9 @@ class PobEngine:
     def new_build(self) -> dict[str, Any]:
         return self.call("new_build")
 
+    def set_class(self, class_name: str, ascendancy: str | None = None) -> dict[str, Any]:
+        return self.call("set_class", **{"class": class_name, "ascendancy": ascendancy})
+
     def load_build_xml(self, xml: str, name: str = "imported") -> dict[str, Any]:
         return self.call("load_build_xml", xml=xml, name=name)
 

@@ -48,3 +48,13 @@ def test_get_unique():
     u = db.get_unique("Andvarius")
     assert u and "Gold Ring" in u["base"]
     assert "Rarity" in u["text"]
+
+
+def test_search_mods_precision():
+    # Column-scoped match: a stat-text query must not match unrelated mods via stat ids
+    # (e.g. "physical damage" was wrongly returning Armour mods).
+    mods = db.search_mods("physical damage", limit=10)
+    assert mods
+    assert all("physical" in m["text"].lower() for m in mods)
+    inc = db.search_mods("increased physical damage", limit=5)
+    assert any("physical damage" in m["text"].lower() for m in inc)

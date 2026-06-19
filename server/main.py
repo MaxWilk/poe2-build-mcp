@@ -76,6 +76,17 @@ def get_build_stats(keys: list[str] | None = None) -> dict[str, Any]:
 
 
 @mcp.tool()
+def set_class(class_name: str, ascendancy: str | None = None) -> dict[str, Any]:
+    """Set the active build's character class and (optionally) ascendancy from scratch.
+
+    `class_name` is a base class (e.g. "Mercenary", "Witch", "Ranger"); `ascendancy` is one of
+    its ascendancies (e.g. "Witchhunter"). This re-roots the passive tree at that class's start,
+    so subsequent passive search/allocate/optimize operate on the correct class. Returns stats.
+    """
+    return get_engine().set_class(class_name, ascendancy=ascendancy)
+
+
+@mcp.tool()
 def set_skill(skill: str) -> dict[str, Any]:
     """Set the active build's main skill using Path of Building's paste format.
 

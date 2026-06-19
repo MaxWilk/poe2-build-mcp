@@ -27,3 +27,23 @@ def test_optimize_improves_dps(fireball):
     res = fireball.optimize_passives(metric="TotalDPS", points=5)
     assert res["allocated"], "optimizer allocated nothing"
     assert res["finalValue"] > res["startValue"]
+
+
+def test_set_class_and_ascendancy(engine):
+    engine.new_build()
+    r = engine.set_class("Mercenary", "Witchhunter")
+    assert r["ok"] and r["class"] == "Mercenary" and r["ascendancy"] == "Witchhunter"
+
+    # a Witchhunter ascendancy node should now exist and be reachable
+    nodes = engine.search_passives(node_type=None, limit=6000)["results"]
+    wh = [n for n in nodes if (n.get("ascendancy") or "") == "Witchhunter" and n.get("pathDist")]
+    assert wh, "no reachable Witchhunter ascendancy nodes after set_class"
+
+    # optimize now paths from the correct class start
+    op = engine.optimize_passives(metric="Life", points=5)
+    assert op["finalValue"] > op["startValue"]
+
+
+def test_set_class_unknown(engine):
+    engine.new_build()
+    assert engine.set_class("Notaclass")["ok"] is False

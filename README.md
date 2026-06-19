@@ -20,6 +20,7 @@ bundled seed — see [PACKAGING.md](PACKAGING.md).
 - `import_build(source)` — import a PoB **share code**, a **pobb.in/pastebin link**, or raw PoB XML
 - `get_build_stats(keys?)` — computed stats (DPS, EHP, resistances, life/ES/mana, …)
 - `set_skill(skill)` — set the main skill, e.g. `"Fireball 20/0  1"`
+- `set_class(class_name, ascendancy?)` — set class + ascendancy from scratch (e.g. Mercenary/Witchhunter)
 - `set_config(options?, custom_mods?)` — combat config and/or extra modifiers
 - `equip_item(raw)` — equip an item from raw PoB item text
 - `evaluate_build(goals)` — pass/fail the build against numeric goals
