@@ -14,19 +14,22 @@ engine can't model something, say so plainly rather than inventing a value.
 ## Three kinds of facts — caveat them differently
 
 - **Computed (engine, authoritative for *this* build):** `get_build_stats`, `get_defenses`,
-  `evaluate_build`, `compare_to`, `solve_for`, `optimize_passives`, `alloc_passive`/`dealloc_passive`, and
-  every `set_*`/`equip_*` mutator (they return fresh stats). These are exact for the current
-  build state.
+  `evaluate_build`, `compare_to`, `solve_for`, `optimize_passives`,
+  `alloc_passive`/`dealloc_passive`, and every `set_*`/`equip_*` mutator (they return fresh
+  stats). These are exact for the current build state. Also engine-backed and build-specific:
+  `search_passives`/`get_passive` (query the *active build's* tree — node stats, allocation, and
+  reachability via `pathDist`) and `engine_health` (engine liveness + installed versions).
 - **Looked-up (corpus, offline & deterministic):** `search_items`/`get_item`,
   `find_skills`/`get_gem`/`find_supports_for`, `search_mods`/`reverse_lookup`,
-  `search_uniques`/`get_unique`, `search_passives`/`get_passive`, `list_ascendancies`,
-  `explain_mechanic`, `build_advice`, `corpus_info`. These are game facts, **not** statements
-  about the user's build's numbers. Use them to *find* options; use the engine to *value* them.
-  `build_advice` gives durable optimization principles (what to change and why); `explain_mechanic`
-  explains a specific mechanic. Both are evergreen — the engine still computes the actual numbers.
+  `search_uniques`/`get_unique`, `list_ascendancies`, `explain_mechanic`, `build_advice`,
+  `corpus_info`. These are static game facts, **not** statements about the user's build's
+  numbers. Use them to *find* options; use the engine to *value* them. `build_advice` gives
+  durable optimization principles (what to change and why); `explain_mechanic` explains a
+  specific mechanic — both evergreen, with the engine still computing the actual numbers.
 - **Live (network, may be unavailable):** `get_prices`, `list_price_leagues`,
-  `check_for_updates`/`apply_updates`, `check_data_version`. Treat prices as approximate and
-  time-sensitive; if a live call returns "unavailable," carry on and say so.
+  `check_data_version`, `check_for_updates`/`apply_updates`, `update_corpus` (power-user local
+  rebuild). Treat prices as approximate and time-sensitive; if a live call returns
+  "unavailable," carry on and say so.
 
 When you give an answer, make clear which bucket it came from (e.g. "PoB computes 1.2M DPS"
 vs. "the corpus lists this unique as…" vs. "current Trade price is roughly…").
@@ -58,6 +61,11 @@ before recommending it.
 
 **Tweak / compare:** mutate the active build and read the returned stats, or use `compare_to`
 to A/B against another code and report the deltas.
+
+**Hit a target:** to turn a goal into a concrete requirement (e.g. "how much more damage for
+1M DPS?"), use `solve_for(metric, target, lever)` — it root-finds the modifier magnitude on the
+current build. It reports a *requirement*, so confirm it's attainable (`search_mods` /
+`find_supports_for`) and that it doesn't wreck survivability (`get_defenses`).
 
 ## Gotchas that will trip you up
 

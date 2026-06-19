@@ -60,6 +60,7 @@ jobs:
 
       - run: uv sync
       - run: uv run ruff check server scripts pipeline tests
+      - run: uv run ruff format --check server scripts pipeline tests
       - run: uv run python -m pipeline.build_corpus
       - name: Golden tests (release gate)
         run: uv run pytest
