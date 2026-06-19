@@ -14,7 +14,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-S = 4  # supersample factor, downscaled at the end for antialiasing
+OUT = 512  # final icon size (Claude Desktop recommends 512×512)
+S = 8  # supersample factor, downscaled at the end for antialiasing
 W = 256 * S
 
 DARK = (20, 17, 13, 255)
@@ -81,7 +82,7 @@ def main() -> None:
     r = 7 * S
     d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 242, 207, 255))
 
-    out = base.resize((256, 256), Image.LANCZOS)
+    out = base.resize((OUT, OUT), Image.LANCZOS)
     dst = Path(__file__).resolve().parents[1] / "assets" / "icon.png"
     out.save(dst)
     print(f"wrote {dst}")
