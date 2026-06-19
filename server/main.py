@@ -365,10 +365,10 @@ def check_for_updates() -> dict[str, Any]:
 @mcp.tool()
 def apply_updates() -> dict[str, Any]:
     """Download and install the latest validated release (engine + corpus) now."""
-    res = live_update.apply_updates()
-    if res.get("updated"):
-        _reset_engine()
-    return res
+    # Close the engine first so it doesn't hold a cwd lock on the files being replaced
+    # (matters on Windows when re-updating an engine already installed in user-data).
+    _reset_engine()
+    return live_update.apply_updates()
 
 
 def main() -> None:

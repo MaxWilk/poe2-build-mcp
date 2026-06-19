@@ -48,9 +48,16 @@
     { "name": "search_uniques", "description": "Search unique items." },
     { "name": "get_unique", "description": "Get a unique item's full text." },
     { "name": "list_ascendancies", "description": "List ascendancies." },
+    { "name": "get_item", "description": "Full data for one item base." },
+    { "name": "get_passive", "description": "Details for one passive node." },
+    { "name": "corpus_info", "description": "Bundled corpus version and counts." },
+    { "name": "engine_health", "description": "Headless calculation-engine status." },
     { "name": "get_prices", "description": "Live currency/unique prices (poe2scout)." },
+    { "name": "list_price_leagues", "description": "List PoE2 leagues available for pricing." },
     { "name": "check_data_version", "description": "Corpus freshness vs upstream." },
-    { "name": "update_corpus", "description": "Rebuild/update the bundled corpus." }
+    { "name": "update_corpus", "description": "Rebuild the corpus from RePoE locally." },
+    { "name": "check_for_updates", "description": "Check for a newer validated release." },
+    { "name": "apply_updates", "description": "Install the latest validated release." }
   ],
   "compatibility": {
     "platforms": ["win32", "darwin", "linux"],
