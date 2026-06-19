@@ -257,9 +257,7 @@ def compare_to(source: str, keys: list[str] | None = None) -> dict[str, Any]:
 
 
 @mcp.tool()
-def solve_for(
-    metric: str, target: float, lever: str, tolerance: float = 0.01
-) -> dict[str, Any]:
+def solve_for(metric: str, target: float, lever: str, tolerance: float = 0.01) -> dict[str, Any]:
     """Solve for the magnitude of one modifier needed to reach a stat target on the active build.
 
     Holds the build fixed and binary-searches `lever` until `metric` reaches `target` — every
@@ -276,7 +274,9 @@ def solve_for(
     reports a *requirement* — verify with get_defenses / evaluate_build and confirm the magnitude
     is attainable via search_mods / find_supports_for.
     """
-    return solver.solve_for(get_engine(), metric=metric, target=target, lever=lever, tolerance=tolerance)
+    return solver.solve_for(
+        get_engine(), metric=metric, target=target, lever=lever, tolerance=tolerance
+    )
 
 
 @mcp.tool()
