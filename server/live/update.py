@@ -28,6 +28,9 @@ MANIFEST_URL = os.environ.get(
     "POE2_MCP_MANIFEST_URL",
     "https://github.com/MaxWilk/poe2-build-mcp/releases/latest/download/update-manifest.json",
 )
+# Where to grab a newer .mcpb for tool/code changes (data updates apply automatically; new
+# tools require reinstalling the bundle, which Claude Desktop has no native auto-updater for).
+RELEASES_PAGE = "https://github.com/MaxWilk/poe2-build-mcp/releases/latest"
 CHECK_INTERVAL_SECONDS = 24 * 3600
 UA = {"User-Agent": "poe2-build-mcp-updater/0.1"}
 
@@ -80,6 +83,9 @@ def check_for_updates() -> dict[str, Any]:
         "current_version": current,
         "latest_version": latest,
         "pob_commit": manifest.get("pob_commit"),
+        # Data (corpus + engine) updates apply automatically via apply_updates; grab a new
+        # .mcpb here only for new tools/code changes.
+        "download_page": RELEASES_PAGE,
     }
 
 

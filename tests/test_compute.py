@@ -52,6 +52,15 @@ def test_equip_item_returns_stats(fireball):
     assert "TotalDPS" in res["stats"]
 
 
+def test_equip_replaces_slot(fireball):
+    craft = "Rarity: Rare\nWand\nAttuned Wand\n{}% increased Cast Speed".format
+    fireball.add_item(craft(10))
+    s1 = fireball.get_stats(["Speed"])["stats"]["Speed"]
+    fireball.add_item(craft(25))  # same slot -> must replace, not be ignored
+    s2 = fireball.get_stats(["Speed"])["stats"]["Speed"]
+    assert s2 > s1
+
+
 def test_blank_luajit_override_is_ignored(monkeypatch):
     # A manifest user-config left blank arrives as a non-existent path (e.g. the literal
     # "${user_config.luajit_path}"); it must not shadow the bundled/system LuaJIT.

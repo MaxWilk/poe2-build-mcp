@@ -232,14 +232,37 @@ function methods.set_config(p)
 	return { stats = collectStats(p.keys) }
 end
 
--- Equip an item from raw PoB item text (auto-slotted by its base type).
+-- Equip an item from raw PoB item text, REPLACING whatever is in the target slot.
+-- p.slot optionally forces a slot (e.g. "Ring 2", "Weapon 2"); otherwise the item's primary slot.
 function methods.add_item(p)
 	assert(p and p.raw, "add_item requires params.raw")
+	local items = build.itemsTab.items
+	local before = {}
+	for id in pairs(items) do
+		before[id] = true
+	end
 	build.itemsTab:CreateDisplayItemFromRaw(p.raw)
-	build.itemsTab:AddDisplayItem(false) -- false = auto-equip into the matching slot
+	build.itemsTab:AddDisplayItem(true) -- add without auto-equip; we place it explicitly
+	local newItem
+	for id, it in pairs(items) do
+		if not before[id] then
+			newItem = it
+			break
+		end
+	end
+	if not newItem then
+		return { ok = false, error = "item not created (unrecognized base type?)" }
+	end
+	local slot = p.slot or newItem:GetPrimarySlot()
+	local slotControl = build.itemsTab.slots[slot]
+	if not slotControl then
+		return { ok = false, error = "unknown slot: " .. tostring(slot) }
+	end
+	slotControl:SetSelItemId(newItem.id) -- replaces any existing item in the slot
 	build.buildFlag = true
+	build.modFlag = true
 	runCallback("OnFrame")
-	return { stats = collectStats(p.keys) }
+	return { ok = true, slot = slot, stats = collectStats(p.keys) }
 end
 
 -- ---------------------------------------------------------------------------

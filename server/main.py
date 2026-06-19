@@ -117,12 +117,13 @@ def set_config(
 
 
 @mcp.tool()
-def equip_item(raw: str) -> dict[str, Any]:
+def equip_item(raw: str, slot: str | None = None) -> dict[str, Any]:
     """Equip an item on the active build from raw Path of Building item text.
 
-    The item is auto-slotted by its base type. Returns updated stats.
+    Replaces whatever is currently in the target slot. `slot` optionally forces the slot
+    (e.g. "Ring 2", "Weapon 2"); otherwise the item's primary slot is used. Returns updated stats.
     """
-    return get_engine().add_item(raw)
+    return get_engine().add_item(raw, slot=slot)
 
 
 @mcp.tool()

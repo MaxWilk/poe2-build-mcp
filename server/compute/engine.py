@@ -152,8 +152,10 @@ class PobEngine:
             params["keys"] = keys
         return self.call("set_config", **params)
 
-    def add_item(self, raw: str, keys: list[str] | None = None) -> dict[str, Any]:
-        return self.call("add_item", raw=raw, keys=keys)
+    def add_item(
+        self, raw: str, slot: str | None = None, keys: list[str] | None = None
+    ) -> dict[str, Any]:
+        return self.call("add_item", raw=raw, slot=slot, keys=keys)
 
     def search_passives(
         self, query: str = "", node_type: str | None = None, limit: int = 30
