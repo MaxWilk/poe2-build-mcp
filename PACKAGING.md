@@ -14,9 +14,11 @@ run per-OS by [.github/workflows/release.yml](.github/workflows/release.yml). A 
 - `runtime/luajit/<platform>/luajit[.exe]` — LuaJIT, built from source in CI (the PoB-pinned
   commit). `server/paths.py` auto-detects it.
 
-The Python side has been validated to run from the bundle with no repo/venv on the path; LuaJIT
-is supplied per-OS by the release workflow. Bundles are large (~400 MB) because they embed PoB's
-game data — updates ship as deltas via releases (below).
+`build_bundle.py` excludes PoB's GUI art (passive-tree / gem textures the headless engine never
+loads — rendering is stubbed), which cuts the bundle from ~400 MB to **~30 MB**. The Python side
+is validated to run from the bundle with no repo/venv on the path, and the trimmed engine produces
+identical numbers (calc + tree + optimize all verified); LuaJIT is supplied per-OS by the release
+workflow.
 
 Build locally (LuaJIT optional; falls back to a system LuaJIT if not vendored):
 

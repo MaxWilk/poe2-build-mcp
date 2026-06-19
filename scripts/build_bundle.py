@@ -22,11 +22,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM = {"win32": "win-x64", "darwin": "mac-arm64", "linux": "linux-x64"}
 
+# GUI art the headless engine never loads (rendering/image loading is stubbed) — excluded
+# from bundles. This is the bulk of PoB's size (passive-tree/gem textures).
+ART_SUFFIXES = (
+    ".dds",
+    ".zst",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tga",
+    ".gif",
+    ".bk2",
+    ".mp4",
+    ".ogg",
+    ".mp3",
+)
 
-def _copy(src: Path, dst: Path) -> None:
+
+def _copy(src: Path, dst: Path, skip_art: bool = False) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.is_dir():
-        shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        patterns = ["__pycache__", "*.pyc"]
+        if skip_art:
+            patterns += [f"*{ext}" for ext in ART_SUFFIXES]
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns(*patterns))
     else:
         shutil.copy2(src, dst)
 
@@ -60,8 +79,12 @@ def main() -> int:
     _copy(ROOT / "pob" / "pob_headless.lua", stage / "pob" / "pob_headless.lua")
     _copy(ROOT / "pob" / "PINNED.md", stage / "pob" / "PINNED.md")
     pob = ROOT / "pob" / "PathOfBuilding-PoE2"
-    _copy(pob / "src", stage / "pob" / "PathOfBuilding-PoE2" / "src")
-    _copy(pob / "runtime" / "lua", stage / "pob" / "PathOfBuilding-PoE2" / "runtime" / "lua")
+    _copy(pob / "src", stage / "pob" / "PathOfBuilding-PoE2" / "src", skip_art=True)
+    _copy(
+        pob / "runtime" / "lua",
+        stage / "pob" / "PathOfBuilding-PoE2" / "runtime" / "lua",
+        skip_art=True,
+    )
 
     # Vendor Python dependencies into lib/ (manifest puts this on PYTHONPATH).
     # Prefer uv (present in CI) for speed; fall back to pip.
