@@ -6,6 +6,8 @@ these drift, re-verify against the GUI and update them in the same commit.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from server.compute.engine import PobEngine
@@ -23,6 +25,7 @@ def test_fireball_golden(fireball):
     s = fireball.get_stats(["TotalDPS", "AverageDamage", "Speed"])["stats"]
     assert s["TotalDPS"] == pytest.approx(FIREBALL_DPS, rel=1e-3)
     assert s["AverageDamage"] == pytest.approx(FIREBALL_AVG, rel=1e-3)
+    assert s["Speed"] == pytest.approx(0.8333, rel=1e-2)
 
 
 def test_import_code_roundtrip(fireball):
@@ -59,6 +62,23 @@ def test_equip_replaces_slot(fireball):
     fireball.add_item(craft(25))  # same slot -> must replace, not be ignored
     s2 = fireball.get_stats(["Speed"])["stats"]["Speed"]
     assert s2 > s1
+
+
+def test_import_code_fixture(engine):
+    # A real build serialized through the actual codec; locks the import + codec + engine path.
+    code = (Path(__file__).parent / "fixtures" / "witchhunter_detonate.pobcode").read_text().strip()
+    engine.new_build()
+    r = engine.load_build_code(code)
+    assert r["mainSkill"] == "Detonate Living"
+    b = engine.get_build()
+    assert b["class"] == "Mercenary" and b["level"] == 90
+
+
+def test_import_build_rejects_garbage():
+    from server.main import import_build
+
+    r = import_build("@@@ not a valid build @@@")
+    assert r.get("ok") is False and "error" in r
 
 
 def test_blank_luajit_override_is_ignored(monkeypatch):

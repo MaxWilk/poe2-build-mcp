@@ -12,7 +12,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .compute.engine import PobEngine
-from .compute.pob_code import decode_code, encode_code, is_link, to_xml
+from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, to_xml
 from .knowledge import db as corpus
 from .knowledge import mechanics
 from .live import prices as live_prices
@@ -63,7 +63,11 @@ def import_build(source: str) -> dict[str, Any]:
     raw PoB XML. Returns the selected main skill and a summary of engine-computed stats.
     The imported build becomes the active build for subsequent tool calls.
     """
-    return get_engine().load_build_xml(_source_to_xml(source))
+    try:
+        xml = _source_to_xml(source)
+    except (PobCodeError, ValueError) as e:
+        return {"ok": False, "error": f"Could not read that build source: {e}"}
+    return get_engine().load_build_xml(xml)
 
 
 @mcp.tool()
@@ -210,11 +214,15 @@ def compare_to(source: str, keys: list[str] | None = None) -> dict[str, Any]:
     current build. Returns the current stats, the other build's stats, and per-stat deltas
     (other - current).
     """
+    try:
+        other_xml = _source_to_xml(source)
+    except (PobCodeError, ValueError) as e:
+        return {"ok": False, "error": f"Could not read the comparison build: {e}"}
     eng = get_engine()
     snapshot = eng.get_xml()
     current = eng.get_stats(keys)["stats"]
     try:
-        eng.load_build_xml(_source_to_xml(source))
+        eng.load_build_xml(other_xml)
         other = eng.get_stats(keys)["stats"]
     finally:
         eng.load_build_xml(snapshot)

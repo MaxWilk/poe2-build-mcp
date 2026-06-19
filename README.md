@@ -9,7 +9,7 @@ See [PLAN.md](PLAN.md) for the full design and [CLAUDE.md](CLAUDE.md) for engine
 ## Status
 
 v1 is complete: **M0–M5** (headless engine, compute, corpus, build mutation, passives, live ops,
-optimize) plus **self-update** and a **self-contained bundle** pipeline. **29 MCP tools**, a
+optimize) plus **self-update** and a **self-contained bundle** pipeline. **38 MCP tools**, a
 golden-build pytest suite, and per-OS `.mcpb` builds via CI. The server auto-updates its engine
 (from validated releases) and corpus into a writable user-data folder, preferring it over the
 bundled seed — see [PACKAGING.md](PACKAGING.md).
@@ -22,6 +22,8 @@ bundled seed — see [PACKAGING.md](PACKAGING.md).
 - `set_skill(skill)` — set the main skill, e.g. `"Fireball 20/0  1"`
 - `set_class(class_name, ascendancy?)` — set class + ascendancy from scratch (e.g. Mercenary/Witchhunter)
 - `set_level(level)` — set character level (1–100)
+- `get_build()` / `export_build()` — full read-back / export as a PoB import code
+- `get_defenses()` — resists (+over-cap) / EHP summary · `list_config_options()` · `unequip_item(slot)`
 - `set_config(options?, custom_mods?)` — combat config and/or extra modifiers
 - `equip_item(raw)` — equip an item from raw PoB item text
 - `evaluate_build(goals)` — pass/fail the build against numeric goals
@@ -33,7 +35,8 @@ bundled seed — see [PACKAGING.md](PACKAGING.md).
 
 *Corpus / knowledge (bundled SQLite + FTS; no engine needed):*
 - `search_items(query, item_class?)` / `get_item(name_or_id)`
-- `find_skills(query?, gem_type?, tag?, color?)` / `get_gem(name_or_id)`
+- `find_skills(query?, gem_type?, tag?, color?)` / `get_gem(name_or_id)` / `find_supports_for(skill)`
+- `explain_mechanic(topic)` — concise references (resistances, ailments, spirit, EHP, …)
 - `search_mods(query, item_tag?, mod_type?)` / `reverse_lookup(stat)`
 - `search_uniques(query, item_type?)` / `get_unique(name)`
 - `list_ascendancies(character?)` / `corpus_info()`

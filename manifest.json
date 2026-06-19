@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A queryable Path of Exile 2 game corpus plus Path-of-Building-faithful calculations: import builds, theorycraft, search items/gems/mods/uniques/passives, optimize, and check live prices.",
   "author": {
     "name": "hotkeysgamesllc"
@@ -59,7 +59,14 @@
     { "name": "check_data_version", "description": "Corpus freshness vs upstream." },
     { "name": "update_corpus", "description": "Rebuild the corpus from RePoE locally." },
     { "name": "check_for_updates", "description": "Check for a newer validated release." },
-    { "name": "apply_updates", "description": "Install the latest validated release." }
+    { "name": "apply_updates", "description": "Install the latest validated release." },
+    { "name": "get_build", "description": "Full read-back of the active build." },
+    { "name": "export_build", "description": "Export the build as a PoB import code." },
+    { "name": "get_defenses", "description": "Defensive summary (life/ES, resists, EHP)." },
+    { "name": "unequip_item", "description": "Clear an equipment slot." },
+    { "name": "list_config_options", "description": "List set_config keys and values." },
+    { "name": "find_supports_for", "description": "Find supports for a skill." },
+    { "name": "explain_mechanic", "description": "Concise PoE2 mechanics reference." }
   ],
   "compatibility": {
     "platforms": ["win32", "darwin", "linux"],
