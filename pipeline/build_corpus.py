@@ -158,7 +158,8 @@ def build() -> dict[str, int]:
         supports = [
             gem_name_by_seg.get(_seg(s), _seg(s)) for s in (g.get("recommended_supports") or [])
         ]
-        desc, types = "", []
+        desc: str = ""
+        types: list[str] = []
         for sid in grants:
             sk = skills.get(sid)
             if sk and sk.get("active_skill"):

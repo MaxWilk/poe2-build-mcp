@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "A queryable Path of Exile 2 game corpus plus Path-of-Building-faithful calculations: import builds, theorycraft, search items/gems/mods/uniques/passives, optimize, and check live prices.",
   "author": {
     "name": "hotkeysgamesllc"
@@ -67,6 +67,11 @@
     { "name": "list_config_options", "description": "List set_config keys and values." },
     { "name": "find_supports_for", "description": "Find supports for a skill." },
     { "name": "explain_mechanic", "description": "Concise PoE2 mechanics reference." }
+  ],
+  "prompts": [
+    { "name": "analyze_build", "description": "Import a PoB build and produce a grounded analysis with improvement ideas.", "arguments": ["source"] },
+    { "name": "build_from_goal", "description": "Create a verified build from a natural-language goal (create -> validate -> cost -> present).", "arguments": ["goal", "character_class"] },
+    { "name": "audit_defenses", "description": "Audit the active build's survivability and propose engine-validated fixes.", "arguments": [] }
   ],
   "compatibility": {
     "platforms": ["win32", "darwin", "linux"],

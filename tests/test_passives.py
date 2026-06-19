@@ -44,9 +44,16 @@ def test_set_class_and_ascendancy(engine):
     assert op["finalValue"] > op["startValue"]
 
 
-def test_set_class_unknown(engine):
+def test_set_class_unknown_lists_valid_options(engine):
     engine.new_build()
-    assert engine.set_class("Notaclass")["ok"] is False
+    bad_cls = engine.set_class("Notaclass")
+    assert bad_cls["ok"] is False
+    # the error must help the model self-correct by naming the real classes
+    assert "Valid classes" in bad_cls["error"] and "Witch" in bad_cls["error"]
+
+    bad_asc = engine.set_class("Witch", "Witchhunter")  # Witchhunter belongs to Mercenary
+    assert bad_asc["ok"] is False
+    assert "Valid ascendancies" in bad_asc["error"]
 
 
 def test_set_level(engine):
@@ -89,6 +96,10 @@ def test_get_defenses(engine):
     d = engine.get_defenses()
     assert d["life"] and d.get("note")
     assert set(d["resistances"]) == {"fire", "cold", "lightning", "chaos"}
+    # The note must report the *actual* penalty (config default -60), not a hard-coded guess.
+    # PoB nets that against a +10% elemental baseline, so a fresh elemental resist = penalty + 10.
+    assert d["resistPenalty"] == -60
+    assert d["resistances"]["fire"] == d["resistPenalty"] + 10
 
 
 def test_points_available_scales_with_level(engine):
@@ -98,3 +109,17 @@ def test_points_available_scales_with_level(engine):
     engine.set_level(20)
     a20 = engine.get_build()["pointsAvailable"]
     assert a90 > a20 > 0
+
+
+def test_engine_reports_tree_version(engine):
+    # the ready frame surfaces the passive-tree data version (used by engine_health)
+    assert engine.info.get("treeVersion")
+
+
+def test_engine_health_reports_versions():
+    from server.main import engine_health
+
+    h = engine_health()
+    assert h["pong"] is True
+    assert h["serverVersion"] and h["dataSource"] in {"bundled", "user-data"}
+    assert h["treeVersion"]

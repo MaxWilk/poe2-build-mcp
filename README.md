@@ -12,7 +12,10 @@ v1 is complete: **M0–M5** (headless engine, compute, corpus, build mutation, p
 optimize) plus **self-update** and a **self-contained bundle** pipeline. **38 MCP tools**, a
 golden-build pytest suite, and per-OS `.mcpb` builds via CI. The server auto-updates its engine
 (from validated releases) and corpus into a writable user-data folder, preferring it over the
-bundled seed — see [PACKAGING.md](PACKAGING.md).
+bundled seed — see [PACKAGING.md](PACKAGING.md). The connector also ships an LLM-facing operating
+guide (delivered via the MCP `instructions` channel, sourced from
+[server/ASSISTANT_GUIDE.md](server/ASSISTANT_GUIDE.md)) plus workflow prompts
+(`analyze_build`, `build_from_goal`, `audit_defenses`) so the assistant uses the tools cohesively.
 
 **Working MCP tools today:**
 
@@ -31,7 +34,7 @@ bundled seed — see [PACKAGING.md](PACKAGING.md).
 - `search_passives(query?, node_type?)` / `get_passive(node)`
 - `alloc_passive(node)` / `dealloc_passive(node)` — allocate/route by id or name, with deltas
 - `optimize_passives(metric, points)` — greedy point allocation to maximize a stat
-- `engine_health()` — headless engine status
+- `engine_health()` — engine + install diagnostics (liveness, LuaJIT/tree/data/server versions)
 
 *Corpus / knowledge (bundled SQLite + FTS; no engine needed):*
 - `search_items(query, item_class?)` / `get_item(name_or_id)`

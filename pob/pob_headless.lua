@@ -145,7 +145,16 @@ function methods.set_class(p)
 		end
 	end
 	if not classId then
-		return { ok = false, error = "unknown class: " .. tostring(p.class) }
+		local valid = {}
+		for name in pairs(tree.classNameMap) do
+			valid[#valid + 1] = name
+		end
+		table.sort(valid)
+		return {
+			ok = false,
+			error = "unknown class '" .. tostring(p.class) .. "'. Valid classes: "
+				.. table.concat(valid, ", "),
+		}
 	end
 	spec:SelectClass(classId)
 
@@ -160,12 +169,21 @@ function methods.set_class(p)
 			end
 		end
 		if not found then
+			local valid = {}
+			for _, asc in pairs(tree.classes[classId].classes) do
+				if asc.name and asc.name ~= "" and asc.name ~= "None" then
+					valid[#valid + 1] = asc.name
+				end
+			end
+			table.sort(valid)
 			return {
 				ok = false,
 				error = "unknown ascendancy '"
 					.. tostring(p.ascendancy)
 					.. "' for class "
-					.. tostring(p.class),
+					.. tostring(p.class)
+					.. ". Valid ascendancies: "
+					.. table.concat(valid, ", "),
 			}
 		end
 	end
@@ -378,12 +396,17 @@ function methods.list_config_options(p)
 	return { count = #out, options = out }
 end
 
--- Defensive summary (resists include PoB's default Endgame -60% penalty; cap is 75%).
+-- Defensive summary. Elemental resists include PoB's area resistance penalty; the note
+-- reports the *actual* penalty currently applied (default is Endgame -60% when unset).
 function methods.get_defenses()
 	local o = (build.calcsTab and build.calcsTab.mainOutput) or {}
 	local function n(k)
 		return type(o[k]) == "number" and o[k] or nil
 	end
+	-- PoB applies configInput.resistancePenalty as a BASE to each elemental resist,
+	-- falling back to -60 (Endgame) when the config is unset (see CalcSetup.lua).
+	local cfg = (build.configTab and build.configTab.input) or {}
+	local penalty = cfg.resistancePenalty or -60
 	return {
 		life = n("Life"),
 		energyShield = n("EnergyShield"),
@@ -404,9 +427,14 @@ function methods.get_defenses()
 			cold = n("ColdResistOverCap"),
 			lightning = n("LightningResistOverCap"),
 		},
+		resistPenalty = penalty,
 		totalEHP = n("TotalEHP"),
-		note = "Resistances include PoB's default Endgame -60% elemental resistance penalty; "
-			.. "the cap is 75%. A fresh character starts at -60% and gear/tree bring it up.",
+		note = ("Elemental resistances are shown net of PoB's configured area penalty "
+			.. "(resistancePenalty = %d%%; PoB's Endgame default is -60%%, earlier acts smaller). "
+			.. "The cap is 75%% — raise resists toward it with gear/tree; over-cap buffers "
+			.. "penetration and curses. Adjust with set_config({resistancePenalty = -60})."):format(
+			penalty
+		),
 	}
 end
 

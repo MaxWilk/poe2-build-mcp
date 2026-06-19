@@ -1,16 +1,22 @@
 """poe2-build-mcp MCP server.
 
-v1 in progress. Currently exposes the compute layer (import + faithful stats from the
-headless Path of Building engine). Corpus/search and live-ops tools land in later milestones.
+Exposes the full v1 surface: the compute layer (import + Path-of-Building-faithful stats,
+passives, mutation, optimize), the offline knowledge corpus (items/skills/mods/uniques/
+passives/mechanics search), and live ops (prices, data-version, self-update). Tool
+implementations live in the layer packages; this module registers them and ships the
+assistant-facing operating guide via the MCP `instructions` channel.
 """
 
 from __future__ import annotations
 
+import json
 import threading
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from . import paths
 from .compute.engine import PobEngine
 from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, to_xml
 from .knowledge import db as corpus
@@ -19,7 +25,20 @@ from .live import prices as live_prices
 from .live import update as live_update
 from .live import version as live_version
 
-mcp = FastMCP("poe2-build-mcp")
+# Operating guide handed to the LLM client (surfaced as "MCP Server Instructions").
+# Sourced from a bundled markdown file so it's both human-editable and actually delivered;
+# falls back to a one-liner if the file is ever missing so the server never fails to boot.
+_GUIDE = Path(__file__).with_name("ASSISTANT_GUIDE.md")
+try:
+    _INSTRUCTIONS: str | None = _GUIDE.read_text(encoding="utf-8")
+except OSError:
+    _INSTRUCTIONS = (
+        "Path of Exile 2 build toolset: an offline knowledge corpus plus a Path of Building "
+        "compute engine. Every build number must come from a compute tool — never invent DPS, "
+        "EHP, or resistances. One active build persists across calls."
+    )
+
+mcp = FastMCP("poe2-build-mcp", instructions=_INSTRUCTIONS)
 
 _engine: PobEngine | None = None
 _engine_lock = threading.Lock()
@@ -94,8 +113,9 @@ def get_build() -> dict[str, Any]:
 @mcp.tool()
 def get_defenses() -> dict[str, Any]:
     """Defensive summary for the active build: life/ES/mana/ward, armour/evasion, block,
-    elemental + chaos resistances (with over-cap), and TotalEHP. Note: resistances include
-    PoB's default Endgame -60% penalty (cap 75%) — a fresh character starts at -60%.
+    elemental + chaos resistances (with over-cap), and TotalEHP. Elemental resists are shown
+    net of PoB's configurable area penalty (default Endgame -60%); the response includes the
+    active `resistPenalty` and a note. Cap is 75%; aim at or just over it.
     """
     return get_engine().get_defenses()
 
@@ -289,10 +309,33 @@ def optimize_passives(
     )
 
 
+def _server_version() -> str:
+    """The installed server (code) version, read from the bundled manifest."""
+    try:
+        return json.loads((paths.BUNDLE_ROOT / "manifest.json").read_text()).get(
+            "version", "unknown"
+        )
+    except (OSError, ValueError):
+        return "unknown"
+
+
 @mcp.tool()
 def engine_health() -> dict[str, Any]:
-    """Report headless calculation-engine status (LuaJIT version, liveness)."""
-    return get_engine().ping()
+    """Report engine + install diagnostics: liveness, LuaJIT and passive-tree versions, the
+    installed data/server versions, and whether data is served from the auto-updated user-data
+    copy or the bundled seed — so you can confirm exactly what's running.
+    """
+    eng = get_engine()
+    health = eng.ping()  # {pong, jit}
+    info = getattr(eng, "info", {}) or {}
+    from_user_data = (paths.user_data_dir() / "corpus.sqlite").exists()
+    return {
+        **health,
+        "treeVersion": info.get("treeVersion"),
+        "dataVersion": live_update.installed_version(),
+        "serverVersion": _server_version(),
+        "dataSource": "user-data" if from_user_data else "bundled",
+    }
 
 
 # --------------------------------------------------------------------------------------
@@ -459,6 +502,53 @@ def apply_updates() -> dict[str, Any]:
     # (matters on Windows when re-updating an engine already installed in user-data).
     _reset_engine()
     return live_update.apply_updates()
+
+
+# ---------------------------------------------------------------------------
+# Prompts — ready-made workflow entry points the client can surface to users.
+# Each returns guidance that steers the assistant through the right tool sequence;
+# the actual numbers always come from the compute engine, never from the prompt.
+# ---------------------------------------------------------------------------
+
+
+@mcp.prompt()
+def analyze_build(source: str) -> str:
+    """Import a PoB build and produce a grounded analysis with improvement ideas."""
+    return (
+        f"Import this Path of Exile 2 build and analyze it:\n\n{source}\n\n"
+        "Steps: call import_build, then get_build, get_defenses, and get_build_stats to see "
+        "where it stands. Identify the biggest weaknesses (offense, survivability, resist caps). "
+        "Use the corpus (search_*, find_supports_for, explain_mechanic) to find concrete "
+        "improvements, then VALIDATE each suggestion on the engine (mutate and re-read stats, "
+        "or compare_to) before recommending it. Distinguish PoB-computed numbers from "
+        "corpus facts, and never state a number the engine didn't produce."
+    )
+
+
+@mcp.prompt()
+def build_from_goal(goal: str, character_class: str = "") -> str:
+    """Create a verified build from a natural-language goal (create → validate → cost → present)."""
+    cls = f" Start from the {character_class} class." if character_class else ""
+    return (
+        f"Create a Path of Exile 2 build for this goal:\n\n{goal}\n{cls}\n\n"
+        "Follow create → validate → cost → present: set_class, set_level, set_skill (use "
+        "find_supports_for to pick supports), allocate the tree with optimize_passives / "
+        "alloc_passive, equip gear with equip_item, then CONFIRM it meets the goal with "
+        "get_defenses and evaluate_build. Check affordability with get_prices. Present the "
+        "result with export_build, and flag (don't recommend) anything that fails evaluate_build."
+    )
+
+
+@mcp.prompt()
+def audit_defenses() -> str:
+    """Audit the active build's survivability and propose fixes."""
+    return (
+        "Audit the active build's defenses. Call get_defenses and report life/ES, EHP, and "
+        "elemental + chaos resistances with over-cap. Remember PoB's default endgame resistance "
+        "penalty makes fresh resists deeply negative — that's expected; the target is the 75% "
+        "cap. Identify the weakest defensive layer and propose specific, engine-validated fixes "
+        "(gear mods via search_mods, uniques, or passives), confirming each with the engine."
+    )
 
 
 def main() -> None:

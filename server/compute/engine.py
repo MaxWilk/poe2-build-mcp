@@ -107,10 +107,20 @@ class PobEngine:
         # One request/response pair must not interleave with another.
         with self._lock:
             self._next_id += 1
-            request = {"id": self._next_id, "method": method, "params": params}
+            req_id = self._next_id
+            request = {"id": req_id, "method": method, "params": params}
             self.proc.stdin.write(json.dumps(request) + "\n")
             self.proc.stdin.flush()
-            resp = self._read_frame()
+            # Read until THIS request's response arrives. Calls are serialized by the lock, so
+            # the only valid frame is the one whose id matches; any other frame (a stray engine
+            # emit, or a leftover from an earlier desync) must be skipped. Without this, a single
+            # extra line would shift every later response onto the wrong call.
+            for _ in range(10000):
+                resp = self._read_frame()
+                if resp.get("id") == req_id:
+                    break
+            else:
+                raise PobEngineError(f"no response for request id={req_id} (engine desync)")
         if not resp.get("ok"):
             raise PobEngineError(resp.get("error", "unknown engine error"))
         return resp["result"]

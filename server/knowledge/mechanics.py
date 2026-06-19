@@ -9,10 +9,11 @@ from __future__ import annotations
 MECHANICS: dict[str, str] = {
     "resistances": (
         "Elemental resistances (fire/cold/lightning) reduce elemental damage taken; the cap is "
-        "75% (raisable with +maximum resistance). Endgame applies a -60% penalty to all "
-        "elemental resistances, so you need about +135% from gear/tree to reach the 75% cap. "
-        "Chaos resistance is separate. 'Over-cap' (resistance above 75%) is a buffer against "
-        "enemy penetration and resistance-reducing curses/exposure."
+        "75% (raisable with +maximum resistance). The endgame area penalty is -60% to elemental "
+        "resistances (smaller in earlier acts), so you need well over +100% from gear/tree to "
+        "reach the 75% cap. Chaos resistance is separate and has no area penalty. 'Over-cap' "
+        "(resistance above 75%) is a buffer against enemy penetration and resistance-reducing "
+        "curses/exposure."
     ),
     "ailments": (
         "Ailments are debuffs caused by damage. Ignite (fire) burns over time; Shock (lightning) "
