@@ -29,8 +29,11 @@ class PobEngineError(RuntimeError):
 
 
 def _find_luajit() -> str:
+    # Only honor POB_LUAJIT if it points at a real file. A manifest user-config like
+    # "${user_config.luajit_path}" arrives as an empty/literal string when left blank, which
+    # must NOT shadow the bundled binary (that caused WinError 2 on installed bundles).
     override = os.environ.get("POB_LUAJIT")
-    if override:
+    if override and Path(override).exists():
         return override
     bundled = paths.bundled_luajit()
     if bundled:

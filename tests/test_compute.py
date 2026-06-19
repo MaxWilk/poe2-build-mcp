@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from server.compute.engine import PobEngine
 from server.compute.pob_code import decode_code, encode_code
 
 FIREBALL_DPS = 124.833
@@ -49,3 +50,14 @@ def test_custom_mod_increases_dps(fireball):
 def test_equip_item_returns_stats(fireball):
     res = fireball.add_item("New Item\nElementalist Robe")
     assert "TotalDPS" in res["stats"]
+
+
+def test_blank_luajit_override_is_ignored(monkeypatch):
+    # A manifest user-config left blank arrives as a non-existent path (e.g. the literal
+    # "${user_config.luajit_path}"); it must not shadow the bundled/system LuaJIT.
+    monkeypatch.setenv("POB_LUAJIT", "${user_config.luajit_path}")
+    eng = PobEngine()
+    try:
+        assert eng.ping()["pong"] is True
+    finally:
+        eng.close()
