@@ -79,3 +79,22 @@ def test_equip_then_unequip(engine):
     assert "Ring 1" in engine.get_build()["gear"]
     engine.unequip_item("Ring 1")
     assert "Ring 1" not in engine.get_build()["gear"]
+
+
+def test_get_defenses(engine):
+    engine.new_build()
+    engine.set_class("Mercenary", "Witchhunter")
+    engine.set_level(90)
+    engine.paste_skill("Detonate Living 20/0  1")
+    d = engine.get_defenses()
+    assert d["life"] and d.get("note")
+    assert set(d["resistances"]) == {"fire", "cold", "lightning", "chaos"}
+
+
+def test_points_available_scales_with_level(engine):
+    engine.new_build()
+    engine.set_level(90)
+    a90 = engine.get_build()["pointsAvailable"]
+    engine.set_level(20)
+    a20 = engine.get_build()["pointsAvailable"]
+    assert a90 > a20 > 0

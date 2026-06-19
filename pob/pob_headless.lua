@@ -73,6 +73,19 @@ local function collectStats(keys)
 	return res
 end
 
+-- Normal passive points available at the current level: 1 per level past 1, plus the
+-- cumulative quest points unlocked by that level (mirrors PoB's EstimatePlayerProgress).
+local function availablePoints()
+	local level = build.characterLevel or 1
+	local qp = 0
+	for _, act in ipairs(build.acts or {}) do
+		if level >= (act.level or 1) then
+			qp = act.questPoints or qp
+		end
+	end
+	return math.max(0, level - 1 + qp)
+end
+
 local function mainSkillName()
 	local sg = build.skillsTab.socketGroupList[build.mainSocketGroup or 1]
 	if sg and sg.displaySkillList and sg.mainActiveSkill then
@@ -331,6 +344,7 @@ function methods.get_build()
 		ascendancyNotables = asc,
 		gear = gear,
 		pointsUsed = spec:CountAllocNodes(),
+		pointsAvailable = availablePoints(),
 		stats = collectStats(),
 	}
 end
@@ -362,6 +376,38 @@ function methods.list_config_options(p)
 		end
 	end
 	return { count = #out, options = out }
+end
+
+-- Defensive summary (resists include PoB's default Endgame -60% penalty; cap is 75%).
+function methods.get_defenses()
+	local o = (build.calcsTab and build.calcsTab.mainOutput) or {}
+	local function n(k)
+		return type(o[k]) == "number" and o[k] or nil
+	end
+	return {
+		life = n("Life"),
+		energyShield = n("EnergyShield"),
+		mana = n("Mana"),
+		ward = n("Ward"),
+		armour = n("Armour"),
+		evasion = n("Evasion"),
+		blockChance = n("BlockChance"),
+		spellBlockChance = n("SpellBlockChance"),
+		resistances = {
+			fire = n("FireResist"),
+			cold = n("ColdResist"),
+			lightning = n("LightningResist"),
+			chaos = n("ChaosResist"),
+		},
+		resistOverCap = {
+			fire = n("FireResistOverCap"),
+			cold = n("ColdResistOverCap"),
+			lightning = n("LightningResistOverCap"),
+		},
+		totalEHP = n("TotalEHP"),
+		note = "Resistances include PoB's default Endgame -60% elemental resistance penalty; "
+			.. "the cap is 75%. A fresh character starts at -60% and gear/tree bring it up.",
+	}
 end
 
 -- ---------------------------------------------------------------------------
@@ -505,7 +551,11 @@ end
 function methods.optimize_passives(p)
 	p = p or {}
 	local metric = p.metric or "TotalDPS"
-	local budget = p.points or 3
+	-- points <= 0 means "use the remaining budget at this level" (level-aware optimize).
+	local budget = p.points
+	if not budget or budget <= 0 then
+		budget = math.max(0, availablePoints() - build.spec:CountAllocNodes())
+	end
 	local cap = p.candidates or 50
 	local nodeType = p.node_type or "Notable"
 	local spec = build.spec

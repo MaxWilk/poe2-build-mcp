@@ -87,6 +87,15 @@ def get_build() -> dict[str, Any]:
 
 
 @mcp.tool()
+def get_defenses() -> dict[str, Any]:
+    """Defensive summary for the active build: life/ES/mana/ward, armour/evasion, block,
+    elemental + chaos resistances (with over-cap), and TotalEHP. Note: resistances include
+    PoB's default Endgame -60% penalty (cap 75%) — a fresh character starts at -60%.
+    """
+    return get_engine().get_defenses()
+
+
+@mcp.tool()
 def export_build() -> dict[str, Any]:
     """Export the active build as a Path of Building import code.
 
@@ -261,8 +270,9 @@ def optimize_passives(
     """Greedily allocate passive points to maximize a stat on the active build.
 
     Spends up to `points` points, each step allocating the reachable node (and its path) that
-    most improves `metric` (e.g. "TotalDPS", "Life", "TotalEHP"). `node_type` defaults to
-    "Notable". Returns the chosen nodes with per-step gains and the start/final metric values.
+    most improves `metric` (e.g. "TotalDPS", "Life", "TotalEHP"). Pass `points=0` to use the
+    full remaining point budget at the character's current level (slower). `node_type` defaults
+    to "Notable". Returns the chosen nodes with per-step gains and start/final metric values.
     This is a bounded greedy search, not a guaranteed global optimum.
     """
     return get_engine().optimize_passives(

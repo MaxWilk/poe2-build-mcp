@@ -192,6 +192,9 @@ class PobEngine:
     def get_build(self) -> dict[str, Any]:
         return self.call("get_build")
 
+    def get_defenses(self) -> dict[str, Any]:
+        return self.call("get_defenses")
+
     def unequip_item(self, slot: str) -> dict[str, Any]:
         return self.call("unequip_item", slot=slot)
 
