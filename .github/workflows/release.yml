@@ -31,6 +31,7 @@ jobs:
       - name: Build LuaJIT (Unix)
         if: runner.os != 'Windows'
         run: |
+          export MACOSX_DEPLOYMENT_TARGET=11.0  # required by LuaJIT on macOS; ignored on Linux
           git clone https://github.com/LuaJIT/LuaJIT luajit-src
           cd luajit-src && git checkout "$LUAJIT_COMMIT" && make
           mkdir -p "$GITHUB_WORKSPACE/runtime/luajit/${{ matrix.plat }}"
@@ -50,9 +51,9 @@ jobs:
           git clone https://github.com/LuaJIT/LuaJIT luajit-src
           cd luajit-src && git checkout "$LUAJIT_COMMIT" && make
           dest="$(cygpath -u "$GITHUB_WORKSPACE")/runtime/luajit/win-x64"
-          mkdir -p "$dest" && cp src/luajit.exe "$dest/"
-          # bundle the mingw runtime DLLs luajit.exe links against
-          ldd src/luajit.exe | awk '/ucrt64/{print $3}' | xargs -I{} cp {} "$dest/" || true
+          mkdir -p "$dest"
+          # luajit.exe links lua51.dll; its only other deps are the Windows UCRT (system DLLs).
+          cp src/luajit.exe src/lua51.dll "$dest/"
 
       - name: Check out pinned PoB
         run: git clone --depth 1 --branch ${{ env.POB_BRANCH }} https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
