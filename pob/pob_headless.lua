@@ -361,6 +361,7 @@ function methods.get_build()
 		keystones = keystones,
 		ascendancyNotables = asc,
 		gear = gear,
+		customMods = (build.configTab and build.configTab.input.customMods) or "",
 		pointsUsed = spec:CountAllocNodes(),
 		pointsAvailable = availablePoints(),
 		stats = collectStats(),

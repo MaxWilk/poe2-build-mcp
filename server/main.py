@@ -18,6 +18,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import paths
 from .compute.engine import PobEngine
+from .compute import solver
 from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, to_xml
 from .knowledge import advice
 from .knowledge import db as corpus
@@ -253,6 +254,29 @@ def compare_to(source: str, keys: list[str] | None = None) -> dict[str, Any]:
         if isinstance(current[k], (int, float)) and isinstance(other[k], (int, float))
     }
     return {"current": current, "other": other, "delta": delta}
+
+
+@mcp.tool()
+def solve_for(
+    metric: str, target: float, lever: str, tolerance: float = 0.01
+) -> dict[str, Any]:
+    """Solve for the magnitude of one modifier needed to reach a stat target on the active build.
+
+    Holds the build fixed and binary-searches `lever` until `metric` reaches `target` — every
+    probe is a real engine evaluation, so the answer is computed, not estimated. Example:
+    `solve_for("TotalDPS", 1000000, "increased fire damage")` →
+    "you need ≈ +N% increased Fire Damage."
+
+    `lever` is a named lever (e.g. "increased fire damage", "attack speed", "maximum life",
+    "increased critical strike chance") or a raw custom-mod template containing "{}" for the
+    magnitude (e.g. "+{} to Level of all Fire Skills"). Returns the required magnitude, or flags
+    the target unreachable with the best achievable value (and `alreadyMet` if you're past it).
+
+    Scope: ONE lever, ONE (increasing) metric. It does not balance survivability or cost and
+    reports a *requirement* — verify with get_defenses / evaluate_build and confirm the magnitude
+    is attainable via search_mods / find_supports_for.
+    """
+    return solver.solve_for(get_engine(), metric=metric, target=target, lever=lever, tolerance=tolerance)
 
 
 @mcp.tool()

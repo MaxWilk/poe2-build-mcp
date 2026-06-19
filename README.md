@@ -49,7 +49,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (39 MCP tools)
+### The toolset (40 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -59,6 +59,7 @@ engine confirms the effect.
 - `set_class(class, ascendancy?)` · `set_level(level)` · `set_skill(skill)` · `set_config(…)`
 - `equip_item(raw)` · `unequip_item(slot)` · `list_config_options(query?)`
 - `evaluate_build(goals)` — pass/fail against numeric goals · `compare_to(source)` — A/B deltas
+- `solve_for(metric, target, lever)` — root-find the modifier magnitude needed to hit a stat target
 - `search_passives(query?, node_type?)` / `get_passive(node)`
 - `alloc_passive(node)` / `dealloc_passive(node)` — allocate/route by id or name, with deltas
 - `optimize_passives(metric, points)` — greedy point allocation to maximize a stat

@@ -14,7 +14,7 @@ engine can't model something, say so plainly rather than inventing a value.
 ## Three kinds of facts — caveat them differently
 
 - **Computed (engine, authoritative for *this* build):** `get_build_stats`, `get_defenses`,
-  `evaluate_build`, `compare_to`, `optimize_passives`, `alloc_passive`/`dealloc_passive`, and
+  `evaluate_build`, `compare_to`, `solve_for`, `optimize_passives`, `alloc_passive`/`dealloc_passive`, and
   every `set_*`/`equip_*` mutator (they return fresh stats). These are exact for the current
   build state.
 - **Looked-up (corpus, offline & deterministic):** `search_items`/`get_item`,

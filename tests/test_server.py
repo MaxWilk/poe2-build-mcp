@@ -27,7 +27,7 @@ def test_workflow_prompts_registered():
 
 def test_tool_surface_intact():
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 39
+    assert len(tools) == 40
 
 
 def test_build_advice_sections():

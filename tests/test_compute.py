@@ -81,6 +81,35 @@ def test_import_build_rejects_garbage():
     assert r.get("ok") is False and "error" in r
 
 
+def test_solve_for_reaches_target(fireball):
+    from server.compute import solver
+
+    base = fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    r = solver.solve_for(fireball, "TotalDPS", base * 2, "increased fire damage")
+    assert r["ok"] and r.get("reachable")
+    assert r["requiredMagnitude"] > 0
+    assert r["achievedValue"] >= base * 2 * 0.98  # within bisection tolerance
+    # the build must be restored — no lingering custom mod from probing
+    assert fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
+
+
+def test_solve_for_already_met(fireball):
+    from server.compute import solver
+
+    base = fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    r = solver.solve_for(fireball, "TotalDPS", base * 0.5, "increased fire damage")
+    assert r["ok"] and r["alreadyMet"] and r["requiredMagnitude"] == 0.0
+
+
+def test_solve_for_noop_lever_detected(fireball):
+    from server.compute import solver
+
+    base = fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    # cold damage does nothing for a pure-fire Fireball — must be flagged, not "unreachable"
+    r = solver.solve_for(fireball, "TotalDPS", base * 2, "increased cold damage")
+    assert r["ok"] is False and "does not affect" in r["error"]
+
+
 def test_blank_luajit_override_is_ignored(monkeypatch):
     # A manifest user-config left blank arrives as a non-existent path (e.g. the literal
     # "${user_config.luajit_path}"); it must not shadow the bundled/system LuaJIT.
