@@ -1,99 +1,128 @@
 # poe2-build-mcp
 
-An MCP server for **Path of Exile 2**: a queryable game corpus plus **Path-of-Building-faithful
-calculations**, so an LLM can import your build, answer questions, and theorycraft against real
-numbers (not invented ones).
+[![Release](https://img.shields.io/github/v/release/MaxWilk/poe2-build-mcp?sort=semver)](https://github.com/MaxWilk/poe2-build-mcp/releases/latest)
+[![License](https://img.shields.io/github/license/MaxWilk/poe2-build-mcp)](LICENSE)
+![Platforms](https://img.shields.io/badge/platforms-win%20%7C%20mac%20%7C%20linux-blue)
 
-See [PLAN.md](PLAN.md) for the full design and [CLAUDE.md](CLAUDE.md) for engineering conventions.
+> A **Path of Exile 2** build assistant for LLMs. It pairs a queryable game corpus with a
+> **Path-of-Building–faithful calculation engine**, so an AI can import your build, answer
+> questions, and theorycraft against **real, computed numbers — never invented ones.**
 
-## Status
+Install it as a one-click `.mcpb` in Claude Desktop and ask things like:
 
-v1 is complete: **M0–M5** (headless engine, compute, corpus, build mutation, passives, live ops,
-optimize) plus **self-update** and a **self-contained bundle** pipeline. **38 MCP tools**, a
-golden-build pytest suite, and per-OS `.mcpb` builds via CI. The server auto-updates its engine
-(from validated releases) and corpus into a writable user-data folder, preferring it over the
-bundled seed — see [PACKAGING.md](PACKAGING.md). The connector also ships an LLM-facing operating
-guide (delivered via the MCP `instructions` channel, sourced from
-[server/ASSISTANT_GUIDE.md](server/ASSISTANT_GUIDE.md)) plus workflow prompts
-(`analyze_build`, `build_from_goal`, `audit_defenses`) so the assistant uses the tools cohesively.
+- *"Import this PoB code — where's my DPS bottlenecked, and what's the cheapest fix?"*
+- *"Build me a level-90 Witchhunter Detonate Living and make sure it caps resistances."*
+- *"What supports should Spark use, and how much does each one actually add?"*
+- *"Is this build tanky enough for endgame bosses? What's my weakest defensive layer?"*
 
-**Working MCP tools today:**
+Every DPS / EHP / resistance figure it reports is computed by a real headless Path of Building,
+not guessed. When PoB can't model something, it says so instead of making a number up.
 
-*Build / compute (real Path of Building numbers):*
-- `import_build(source)` — import a PoB **share code**, a **pobb.in/pastebin link**, or raw PoB XML
+## Install (Claude Desktop)
+
+1. Download the `.mcpb` for your OS from the [latest release](https://github.com/MaxWilk/poe2-build-mcp/releases/latest).
+2. Open it with Claude Desktop and install it when prompted (extensions are managed under **Settings → Extensions**).
+3. Start asking build questions. The first call boots the engine (a few seconds to load game
+   data); everything after is fast.
+
+The bundle ships the PoB engine, LuaJIT, the game-data corpus, and Python deps. You need
+**Python 3.11+** available on your system. The corpus and engine **self-update** from validated
+GitHub releases into a writable user-data folder, so the data stays current without a reinstall
+(server *code* updates land when you install a newer `.mcpb`). See [PACKAGING.md](PACKAGING.md).
+
+## What it can do
+
+**Import & analyze** a build from a PoB share code, a pobb.in/pastebin link, or raw PoB XML —
+then read back computed DPS, EHP, resistances, life/ES, and more.
+
+**Create & tweak** builds from scratch: set class/ascendancy, level, skills + supports, gear,
+config, and the passive tree, validating every change on the engine. There's a greedy passive
+optimizer and an A/B `compare_to`.
+
+**Look things up** offline: items, skill/support gems, affixes, uniques, passives, ascendancies
+— a bundled SQLite/FTS corpus, no network needed.
+
+**Reason well**, not just compute: `build_advice` and `explain_mechanic` provide durable PoE2
+optimization principles and mechanics references (see
+[server/BUILD_ADVICE.md](server/BUILD_ADVICE.md)) so the assistant knows *what* to change; the
+engine confirms the effect.
+
+**Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
+
+### The toolset (39 MCP tools)
+
+*Build / compute — real Path of Building numbers:*
+- `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
 - `get_build_stats(keys?)` — computed stats (DPS, EHP, resistances, life/ES/mana, …)
-- `set_skill(skill)` — set the main skill, e.g. `"Fireball 20/0  1"`
-- `set_class(class_name, ascendancy?)` — set class + ascendancy from scratch (e.g. Mercenary/Witchhunter)
-- `set_level(level)` — set character level (1–100)
 - `get_build()` / `export_build()` — full read-back / export as a PoB import code
-- `get_defenses()` — resists (+over-cap) / EHP summary · `list_config_options()` · `unequip_item(slot)`
-- `set_config(options?, custom_mods?)` — combat config and/or extra modifiers
-- `equip_item(raw)` — equip an item from raw PoB item text
-- `evaluate_build(goals)` — pass/fail the build against numeric goals
-- `compare_to(source)` — A/B the active build vs another, with deltas
+- `get_defenses()` — resists (+over-cap), EHP, and the active resistance-penalty assumption
+- `set_class(class, ascendancy?)` · `set_level(level)` · `set_skill(skill)` · `set_config(…)`
+- `equip_item(raw)` · `unequip_item(slot)` · `list_config_options(query?)`
+- `evaluate_build(goals)` — pass/fail against numeric goals · `compare_to(source)` — A/B deltas
 - `search_passives(query?, node_type?)` / `get_passive(node)`
 - `alloc_passive(node)` / `dealloc_passive(node)` — allocate/route by id or name, with deltas
 - `optimize_passives(metric, points)` — greedy point allocation to maximize a stat
 - `engine_health()` — engine + install diagnostics (liveness, LuaJIT/tree/data/server versions)
 
-*Corpus / knowledge (bundled SQLite + FTS; no engine needed):*
+*Corpus / knowledge — bundled SQLite + FTS, no engine needed:*
 - `search_items(query, item_class?)` / `get_item(name_or_id)`
 - `find_skills(query?, gem_type?, tag?, color?)` / `get_gem(name_or_id)` / `find_supports_for(skill)`
-- `explain_mechanic(topic)` — concise references (resistances, ailments, spirit, EHP, …)
+- `build_advice(topic?)` — evergreen build-optimization principles
+- `explain_mechanic(topic)` — concise mechanics references (resistances, ailments, spirit, EHP, …)
 - `search_mods(query, item_tag?, mod_type?)` / `reverse_lookup(stat)`
 - `search_uniques(query, item_type?)` / `get_unique(name)`
 - `list_ascendancies(character?)` / `corpus_info()`
 
-*Live ops & self-update (network):*
+*Live ops & self-update — network:*
 - `get_prices(query, kind, league?)` — poe2scout currency/unique prices · `list_price_leagues()`
 - `check_for_updates()` / `apply_updates()` — pull validated engine + corpus releases
 - `check_data_version()` / `update_corpus(rebuild_from_source?)`
 
-Next: an `optimize` helper (bounded search over the engine) and packaging into a one-click
-`.mcpb`. See the roadmap in PLAN.md.
+The connector also ships an LLM-facing operating guide (delivered via the MCP `instructions`
+channel, from [server/ASSISTANT_GUIDE.md](server/ASSISTANT_GUIDE.md)) plus workflow prompts
+(`analyze_build`, `build_from_goal`, `audit_defenses`) so the assistant uses the tools cohesively.
 
 ## How it works
 
-Two layers behind one server (Python):
+Two layers behind one Python server:
+
 - **Compute** — a vendored [PathOfBuilding-PoE2](https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2)
-  fork run headless under LuaJIT as a persistent JSON-RPC subprocess (loads game data once, answers many calls).
-- **Knowledge** *(in progress)* — a bundled SQLite/FTS corpus built offline from RePoE/poe2db.
+  fork run headless under LuaJIT as a persistent JSON-RPC subprocess (loads game data once,
+  answers many calls cheaply). PoB is pinned to a release tag and bumped deliberately behind
+  golden-build tests.
+- **Knowledge** — a bundled, read-only SQLite/FTS corpus built offline from RePoE/poe2db.
 
-## Prerequisites (Windows)
+Knowledge code never imports compute code; cross-layer orchestration lives in `server/main.py`.
+See [PLAN.md](PLAN.md) for the full design and [CLAUDE.md](CLAUDE.md) for engineering conventions.
 
-- **Python 3.11+**
-- **LuaJIT 2.1** — via MSYS2: `pacman -S mingw-w64-ucrt-x86_64-luajit`
-  (auto-detected at `C:\msys64\ucrt64\bin\luajit.exe`; override with the `POB_LUAJIT` env var)
-- **uv** — `python -m pip install uv`
-- The **PoB-PoE2 working copy** (git-ignored; pinned in [pob/PINNED.md](pob/PINNED.md)):
-  ```sh
-  git clone --depth 1 --branch dev \
-    https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git \
-    pob/PathOfBuilding-PoE2
-  ```
+## Build from source (development)
 
-## Setup & verify
+Prerequisites: **Python 3.11+**, **uv** (`python -m pip install uv`), and **LuaJIT 2.1**
+(Windows via MSYS2: `pacman -S mingw-w64-ucrt-x86_64-luajit`; auto-detected at
+`C:\msys64\ucrt64\bin\luajit.exe`, override with the `POB_LUAJIT` env var). Then clone the
+git-ignored PoB working copy (pinned in [pob/PINNED.md](pob/PINNED.md)):
+
+```sh
+git clone --depth 1 --branch dev \
+  https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git \
+  pob/PathOfBuilding-PoE2
+```
+
+Set up and verify:
 
 ```sh
 uv sync                                    # create venv, install deps
 uv run python -m pipeline.build_corpus     # build data/corpus.sqlite from RePoE (network)
-uv run python scripts/smoke_compute.py     # engine round-trip (ping/new_build/skill)
-uv run python scripts/smoke_import.py      # PoB import-code round-trip
 uv run pytest                              # golden-build suite (engine + corpus)
-uv run python scripts/smoke_optimize.py    # greedy passive optimizer
-uv run python scripts/smoke_live.py        # live prices + data-version check (network)
 uv run python scripts/smoke_mcp_client.py  # full MCP protocol over stdio (all tool groups)
 ```
 
 The `scripts/smoke_*.py` files cover each tool group individually; `pytest` is the pinned
-golden-value regression suite (see `tests/`).
+golden-value regression suite (see `tests/`). On Windows, run the smoke scripts with
+`PYTHONUTF8=1` to avoid code-page issues with some item/skill names (the server itself is
+unaffected). Lint/type with `uv run ruff check . && uv run mypy server`.
 
-> Smoke scripts print to the console; on Windows run them with `PYTHONUTF8=1` to avoid
-> code-page issues with some item/skill names. The MCP server itself is unaffected.
-
-## Connect to Claude Desktop
-
-Add to `claude_desktop_config.json` (adjust the `uv.exe` path and project dir):
+To run from source in Claude Desktop, add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -106,5 +135,9 @@ Add to `claude_desktop_config.json` (adjust the `uv.exe` path and project dir):
 }
 ```
 
-The first tool call boots the engine (a few seconds to load game data); subsequent calls are fast.
-Then ask, e.g.: *"Import this build code … what's my Fireball DPS and where can I push it?"*
+## Data & credit
+
+Game data is GGG's IP, redistributed as *derived* data within established community-tool norms —
+with credit to the [RePoE fork](https://repoe-fork.github.io/poe2/) and poe2db. Build numbers come
+from the [PathOfBuilding-PoE2](https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2)
+community fork. This project is not affiliated with or endorsed by Grinding Gear Games.

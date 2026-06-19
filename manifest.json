@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "A queryable Path of Exile 2 game corpus plus Path-of-Building-faithful calculations: import builds, theorycraft, search items/gems/mods/uniques/passives, optimize, and check live prices.",
   "author": {
     "name": "hotkeysgamesllc"
@@ -66,7 +66,8 @@
     { "name": "unequip_item", "description": "Clear an equipment slot." },
     { "name": "list_config_options", "description": "List set_config keys and values." },
     { "name": "find_supports_for", "description": "Find supports for a skill." },
-    { "name": "explain_mechanic", "description": "Concise PoE2 mechanics reference." }
+    { "name": "explain_mechanic", "description": "Concise PoE2 mechanics reference." },
+    { "name": "build_advice", "description": "Evergreen PoE2 build-optimization principles (durable rules)." }
   ],
   "prompts": [
     { "name": "analyze_build", "description": "Import a PoB build and produce a grounded analysis with improvement ideas.", "arguments": ["source"] },

@@ -20,8 +20,10 @@ engine can't model something, say so plainly rather than inventing a value.
 - **Looked-up (corpus, offline & deterministic):** `search_items`/`get_item`,
   `find_skills`/`get_gem`/`find_supports_for`, `search_mods`/`reverse_lookup`,
   `search_uniques`/`get_unique`, `search_passives`/`get_passive`, `list_ascendancies`,
-  `explain_mechanic`, `corpus_info`. These are game facts, **not** statements about the user's
-  build's numbers. Use them to *find* options; use the engine to *value* them.
+  `explain_mechanic`, `build_advice`, `corpus_info`. These are game facts, **not** statements
+  about the user's build's numbers. Use them to *find* options; use the engine to *value* them.
+  `build_advice` gives durable optimization principles (what to change and why); `explain_mechanic`
+  explains a specific mechanic. Both are evergreen — the engine still computes the actual numbers.
 - **Live (network, may be unavailable):** `get_prices`, `list_price_leagues`,
   `check_for_updates`/`apply_updates`, `check_data_version`. Treat prices as approximate and
   time-sensitive; if a live call returns "unavailable," carry on and say so.

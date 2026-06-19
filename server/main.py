@@ -19,6 +19,7 @@ from mcp.server.fastmcp import FastMCP
 from . import paths
 from .compute.engine import PobEngine
 from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, to_xml
+from .knowledge import advice
 from .knowledge import db as corpus
 from .knowledge import mechanics
 from .live import prices as live_prices
@@ -394,6 +395,17 @@ def explain_mechanic(topic: str) -> dict[str, Any]:
     critical_strike, ehp, accuracy, recovery. Returns the available topic list if not found.
     """
     return mechanics.explain(topic)
+
+
+@mcp.tool()
+def build_advice(topic: str = "") -> dict[str, Any]:
+    """Evergreen PoE2 build-optimization principles — durable rules, not a meta snapshot.
+
+    Omit `topic` for the framing + section list; pass a topic (e.g. "defense", "offense",
+    "resistances", "crit", "spirit", "red flags") to get that section. These are *principles*
+    for deciding what to change; the actual DPS/EHP numbers still come from the compute tools.
+    """
+    return advice.advise(topic)
 
 
 @mcp.tool()

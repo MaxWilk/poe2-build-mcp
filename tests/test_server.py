@@ -27,7 +27,19 @@ def test_workflow_prompts_registered():
 
 def test_tool_surface_intact():
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 38
+    assert len(tools) == 39
+
+
+def test_build_advice_sections():
+    from server.knowledge import advice
+
+    overview = advice.advise()
+    assert overview["topics"]
+    assert "engine" in overview["intro"].lower()  # framing: numbers come from the engine
+    # the durable resistance-cap rule must survive in the defense section
+    assert "75%" in advice.advise("defense")["text"]
+    # fuzzy keyword match resolves a query that isn't a section title
+    assert advice.advise("crit").get("topic")
 
 
 def test_server_version_matches_manifest():
