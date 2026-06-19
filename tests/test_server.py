@@ -22,7 +22,7 @@ def test_instructions_are_delivered():
 
 def test_workflow_prompts_registered():
     prompts = {p.name for p in asyncio.run(mcp.list_prompts())}
-    assert {"analyze_build", "build_from_goal", "audit_defenses"} <= prompts
+    assert {"start_build_session", "analyze_build", "build_from_goal", "audit_defenses"} <= prompts
 
 
 def test_tool_surface_intact():

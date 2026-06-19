@@ -30,6 +30,15 @@ The bundle ships the PoB engine, LuaJIT, the game-data corpus, and Python deps. 
 GitHub releases into a writable user-data folder, so the data stays current without a reinstall
 (server *code* updates land when you install a newer `.mcpb`). See [PACKAGING.md](PACKAGING.md).
 
+### Starting a session
+
+Once the extension is enabled, just ask a Path of Exile 2 question — Claude will reach for the
+tools. To kick off explicitly, pick the **`start_build_session`** prompt from Claude Desktop's
+prompt menu (or a task-specific one: `analyze_build`, `build_from_goal`, `audit_defenses`). In
+Claude Code, configure the server (see [Build from source](#build-from-source-development)) and,
+if you like, add a line to your `CLAUDE.md` such as *"For Path of Exile 2 build questions, use the
+poe2-build MCP tools."* so it prefers them automatically.
+
 ## What it can do
 
 **Import & analyze** a build from a PoB share code, a pobb.in/pastebin link, or raw PoB XML —

@@ -548,6 +548,29 @@ def apply_updates() -> dict[str, Any]:
 
 
 @mcp.prompt()
+def start_build_session(opening: str = "") -> str:
+    """Start a Path of Exile 2 build session — orients the assistant to drive the poe2-build tools."""
+    tail = f"\n\nThe player's opening request:\n{opening}" if opening.strip() else ""
+    return (
+        "You're now in a Path of Exile 2 build session. Use the poe2-build tools as the source of "
+        "truth for this whole conversation: every DPS / EHP / resistance / defense figure must come "
+        "from the compute engine (e.g. get_build_stats, get_defenses, compare_to, solve_for) — don't "
+        "answer build math from memory, and lean on build_advice / explain_mechanic for principles "
+        "and mechanics.\n\n"
+        "What you can do here:\n"
+        "- Analyze a build: import_build (a PoB code, pobb.in/pastebin link, or XML), then get_build "
+        "/ get_defenses / get_build_stats, and suggest engine-validated improvements.\n"
+        "- Build from scratch: set_class → set_level → set_skill (find_supports_for for supports) → "
+        "optimize_passives / alloc_passive → equip_item, validating each step on the engine.\n"
+        "- Solve toward a goal: solve_for, evaluate_build, optimize_passives.\n"
+        "- Look things up: items, gems, mods, uniques, passives, ascendancies; check live prices.\n\n"
+        "If the player hasn't said what they want, ask whether they'd like to analyze an existing "
+        "build, create one from a goal, or get advice — then go."
+        f"{tail}"
+    )
+
+
+@mcp.prompt()
 def analyze_build(source: str) -> str:
     """Import a PoB build and produce a grounded analysis with improvement ideas."""
     return (

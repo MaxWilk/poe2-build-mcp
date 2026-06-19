@@ -11,6 +11,10 @@ crit, accuracy, hit chance — all of it comes from a compute tool. Do not estim
 or reason your way to a damage/defense figure. If you want a number, call the engine. If the
 engine can't model something, say so plainly rather than inventing a value.
 
+And reach for the tools **proactively**: whenever the user asks about a PoE2 build, item, skill,
+passive, mechanic, or any number, use this toolset instead of answering from memory — that's the
+whole point of the connector. The `start_build_session` prompt is a one-click way to open a session.
+
 ## Three kinds of facts — caveat them differently
 
 - **Computed (engine, authoritative for *this* build):** `get_build_stats`, `get_defenses`,
