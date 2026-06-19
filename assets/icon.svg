@@ -1,0 +1,35 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- Original passive-tree "constellation" mark for a PoE2 build tool (not GGG's logo). -->
+  <rect width="256" height="256" rx="48" fill="#14110d"/>
+  <rect x="6" y="6" width="244" height="244" rx="44" fill="none" stroke="#3a2f1f" stroke-width="3"/>
+
+  <!-- connecting paths -->
+  <g stroke="#7a5f30" stroke-width="5" stroke-linecap="round" opacity="0.9">
+    <line x1="128" y1="128" x2="74" y2="72"/>
+    <line x1="128" y1="128" x2="188" y2="70"/>
+    <line x1="128" y1="128" x2="196" y2="156"/>
+    <line x1="128" y1="128" x2="92" y2="190"/>
+    <line x1="74" y1="72" x2="188" y2="70"/>
+    <line x1="196" y1="156" x2="170" y2="206"/>
+    <line x1="92" y1="190" x2="170" y2="206"/>
+  </g>
+
+  <!-- node glows (layered translucent discs, no blur filters for max compatibility) -->
+  <g fill="#f2c14e">
+    <circle cx="128" cy="128" r="34" opacity="0.16"/>
+    <circle cx="128" cy="128" r="24" opacity="0.22"/>
+  </g>
+
+  <!-- satellite nodes -->
+  <g fill="#e8b94a" stroke="#14110d" stroke-width="3">
+    <circle cx="74" cy="72" r="11"/>
+    <circle cx="188" cy="70" r="11"/>
+    <circle cx="196" cy="156" r="11"/>
+    <circle cx="92" cy="190" r="11"/>
+    <circle cx="170" cy="206" r="9"/>
+  </g>
+
+  <!-- central keystone node -->
+  <circle cx="128" cy="128" r="18" fill="#f7d271" stroke="#8a6a2c" stroke-width="4"/>
+  <circle cx="128" cy="128" r="7" fill="#fff2cf"/>
+</svg>

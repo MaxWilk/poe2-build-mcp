@@ -69,7 +69,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/poe2-build-mcp-${{ matrix.plat }}.mcpb
+          files: dist/poe2-build-mcp-${{ github.ref_name }}-${{ matrix.plat }}.mcpb
 
   update-assets:
     # Publishes the self-update payload (engine + corpus) and the manifest update.py reads.

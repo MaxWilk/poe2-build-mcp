@@ -24,7 +24,7 @@ Build locally (LuaJIT optional; falls back to a system LuaJIT if not vendored):
 
 ```sh
 uv run python scripts/build_bundle.py --version 2026.06.19
-# -> dist/poe2-build-mcp-<platform>.mcpb
+# -> dist/poe2-build-mcp-<version>-<platform>.mcpb
 ```
 
 > The release workflow needs a first real run to shake out per-OS specifics (notably the

@@ -2,7 +2,7 @@
 
 Stages the server, the PoB engine subset (src + runtime/lua + headless shim), the corpus,
 vendored Python deps, and — if present at runtime/luajit/<platform>/ — a per-OS LuaJIT binary.
-Then zips everything to dist/poe2-build-mcp-<platform>.mcpb.
+Then zips everything to dist/poe2-build-mcp-<version>-<platform>.mcpb.
 
 Run per-OS (locally or in CI). LuaJIT is supplied by the caller/CI in runtime/luajit/<platform>/
 (the server auto-detects a bundled binary there via server/paths.py).
@@ -67,9 +67,10 @@ def main() -> int:
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
 
-    # Server code + manifest
+    # Server code + manifest + bundle icon (shown for the extension in Claude Desktop)
     _copy(ROOT / "server", stage / "server")
     _copy(ROOT / "manifest.json", stage / "manifest.json")
+    _copy(ROOT / "assets" / "icon.png", stage / "assets" / "icon.png")
 
     # Bundled seed data
     _copy(corpus, stage / "data" / "corpus.sqlite")
@@ -117,7 +118,7 @@ def main() -> int:
     # Zip to .mcpb
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    mcpb = out / f"poe2-build-mcp-{args.platform}.mcpb"
+    mcpb = out / f"poe2-build-mcp-{args.version}-{args.platform}.mcpb"
     if mcpb.exists():
         mcpb.unlink()
     with zipfile.ZipFile(mcpb, "w", zipfile.ZIP_DEFLATED) as zf:
