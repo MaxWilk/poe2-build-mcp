@@ -8,11 +8,11 @@ See [PLAN.md](PLAN.md) for the full design and [CLAUDE.md](CLAUDE.md) for engine
 
 ## Status
 
-v1 is functionally complete: **M0** (headless PoB engine), **M1** (compute + import + MCP server),
-**M2** (corpus: items/gems/mods/uniques/ascendancies + reverse-lookup), **M3** (build mutation),
-passive-tree tools, **M4** (live ops), and **M5** (`optimize`). **27 MCP tools**, all verified over
-the protocol, with a golden-build pytest suite. What remains is release packaging — a fully
-self-contained, multi-OS `.mcpb` (see [PACKAGING.md](PACKAGING.md)).
+v1 is complete: **M0–M5** (headless engine, compute, corpus, build mutation, passives, live ops,
+optimize) plus **self-update** and a **self-contained bundle** pipeline. **29 MCP tools**, a
+golden-build pytest suite, and per-OS `.mcpb` builds via CI. The server auto-updates its engine
+(from validated releases) and corpus into a writable user-data folder, preferring it over the
+bundled seed — see [PACKAGING.md](PACKAGING.md).
 
 **Working MCP tools today:**
 
@@ -36,9 +36,10 @@ self-contained, multi-OS `.mcpb` (see [PACKAGING.md](PACKAGING.md)).
 - `search_uniques(query, item_type?)` / `get_unique(name)`
 - `list_ascendancies(character?)` / `corpus_info()`
 
-*Live ops (network):*
-- `get_prices(query, kind, league?)` — poe2scout currency/unique prices
-- `list_price_leagues()` / `check_data_version()` / `update_corpus(rebuild_from_source?)`
+*Live ops & self-update (network):*
+- `get_prices(query, kind, league?)` — poe2scout currency/unique prices · `list_price_leagues()`
+- `check_for_updates()` / `apply_updates()` — pull validated engine + corpus releases
+- `check_data_version()` / `update_corpus(rebuild_from_source?)`
 
 Next: an `optimize` helper (bounded search over the engine) and packaging into a one-click
 `.mcpb`. See the roadmap in PLAN.md.

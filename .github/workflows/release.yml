@@ -1,0 +1,112 @@
+name: Release
+
+# Tag a release (e.g. `git tag v0.1.0 && git push --tags`) to build per-OS self-contained
+# .mcpb bundles and publish the self-update assets (corpus + engine + update-manifest).
+on:
+  push:
+    tags: ["v*", "data-*"]
+
+permissions:
+  contents: write
+
+env:
+  POB_BRANCH: dev
+  LUAJIT_COMMIT: 871db2c84ecefd70a850e03a6c340214a81739f0 # matches PoB's pinned LuaJIT
+
+jobs:
+  bundles:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, plat: linux-x64 }
+          - { os: macos-latest, plat: mac-arm64 }
+          - { os: windows-latest, plat: win-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+
+      - name: Build LuaJIT (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          git clone https://github.com/LuaJIT/LuaJIT luajit-src
+          cd luajit-src && git checkout "$LUAJIT_COMMIT" && make
+          mkdir -p "$GITHUB_WORKSPACE/runtime/luajit/${{ matrix.plat }}"
+          cp src/luajit "$GITHUB_WORKSPACE/runtime/luajit/${{ matrix.plat }}/luajit"
+
+      - name: Set up MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: git make mingw-w64-ucrt-x86_64-gcc
+
+      - name: Build LuaJIT (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          git clone https://github.com/LuaJIT/LuaJIT luajit-src
+          cd luajit-src && git checkout "$LUAJIT_COMMIT" && make
+          dest="$GITHUB_WORKSPACE/runtime/luajit/win-x64"
+          mkdir -p "$dest" && cp src/luajit.exe "$dest/"
+          # bundle the mingw runtime DLLs luajit.exe links against
+          ldd src/luajit.exe | awk '/ucrt64/{print $3}' | xargs -I{} cp {} "$dest/" || true
+
+      - name: Check out pinned PoB
+        run: git clone --depth 1 --branch ${{ env.POB_BRANCH }} https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+
+      - run: uv sync
+      - run: uv run ruff check server scripts pipeline tests
+      - run: uv run python -m pipeline.build_corpus
+      - name: Golden tests (release gate)
+        run: uv run pytest
+
+      - name: Build bundle
+        run: uv run python scripts/build_bundle.py --version ${{ github.ref_name }} --platform ${{ matrix.plat }}
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/poe2-build-mcp-${{ matrix.plat }}.mcpb
+
+  update-assets:
+    # Publishes the self-update payload (engine + corpus) and the manifest update.py reads.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: sudo apt-get update && sudo apt-get install -y luajit zip
+      - run: git clone --depth 1 --branch ${{ env.POB_BRANCH }} https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+      - run: uv sync && uv run python -m pipeline.build_corpus
+
+      - name: Assemble update payload + manifest
+        run: |
+          mkdir -p rel
+          cp data/corpus.sqlite rel/corpus.sqlite
+          zip -r rel/pob-engine.zip \
+            pob/pob_headless.lua \
+            pob/PathOfBuilding-PoE2/src \
+            pob/PathOfBuilding-PoE2/runtime/lua
+          POB_COMMIT=$(git -C pob/PathOfBuilding-PoE2 rev-parse --short HEAD)
+          BASE="https://github.com/${{ github.repository }}/releases/latest/download"
+          python - "$POB_COMMIT" "$BASE" <<'PY'
+          import hashlib, json, sys
+          commit, base = sys.argv[1], sys.argv[2]
+          def sha(p): return hashlib.sha256(open(p,"rb").read()).hexdigest()
+          manifest = {
+              "version": "${{ github.ref_name }}",
+              "pob_commit": commit,
+              "corpus": {"url": f"{base}/corpus.sqlite", "sha256": sha("rel/corpus.sqlite")},
+              "engine": {"url": f"{base}/pob-engine.zip", "sha256": sha("rel/pob-engine.zip")},
+          }
+          json.dump(manifest, open("rel/update-manifest.json","w"), indent=2)
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rel/corpus.sqlite
+            rel/pob-engine.zip
+            rel/update-manifest.json

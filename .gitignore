@@ -19,6 +19,9 @@ pob/PathOfBuilding-PoE2/
 # Bundled runtime binaries (assembled at package time)
 runtime/luajit/
 
+# Bundle build output
+dist/
+
 # OS
 Thumbs.db
 .DS_Store

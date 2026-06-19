@@ -16,9 +16,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SRC = REPO_ROOT / "pob" / "PathOfBuilding-PoE2" / "src"
-DEFAULT_SCRIPT = REPO_ROOT / "pob" / "pob_headless.lua"
+from .. import paths
 
 _LUAJIT_FALLBACKS = (
     r"C:\msys64\ucrt64\bin\luajit.exe",
@@ -34,6 +32,9 @@ def _find_luajit() -> str:
     override = os.environ.get("POB_LUAJIT")
     if override:
         return override
+    bundled = paths.bundled_luajit()
+    if bundled:
+        return str(bundled)
     found = shutil.which("luajit")
     if found:
         return found
@@ -54,8 +55,8 @@ class PobEngine:
         show_engine_logs: bool = False,
     ) -> None:
         self.luajit = luajit or _find_luajit()
-        self.src_dir = Path(src_dir or DEFAULT_SRC)
-        self.script = Path(script or DEFAULT_SCRIPT)
+        self.src_dir = Path(src_dir) if src_dir else paths.pob_src_dir()
+        self.script = Path(script) if script else paths.pob_headless_script()
         if not self.src_dir.is_dir():
             raise FileNotFoundError(f"PoB src dir not found: {self.src_dir}")
         if not self.script.is_file():

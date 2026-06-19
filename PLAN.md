@@ -10,10 +10,11 @@
 
 ## Status — v1 functionally complete (2026-06)
 
-M0–M5 are implemented and verified: 27 MCP tools (compute, passives, corpus, live ops,
-optimize) with a golden-build pytest suite. `explain_mechanic` is intentionally deferred.
-Remaining work is release packaging — a self-contained, multi-OS `.mcpb`; see
-[PACKAGING.md](PACKAGING.md). Current usage and the full tool list are in [README.md](README.md).
+M0–M5 are implemented and verified: 29 MCP tools (compute, passives, corpus, live ops, optimize,
+self-update) with a golden-build pytest suite. Self-update (from validated releases) and a
+self-contained per-OS `.mcpb` pipeline are in place; the remaining step is the first tagged CI
+release to publish the bundles + update assets. `explain_mechanic` is intentionally deferred.
+See [PACKAGING.md](PACKAGING.md) and [README.md](README.md).
 
 ---
 

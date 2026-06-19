@@ -99,7 +99,7 @@ def update_corpus(
     sha = manifest.get("sha256")
     if sha and hashlib.sha256(blob).hexdigest() != sha:
         return {"updated": False, "error": "checksum mismatch"}
-    dest = db.DB_PATH
+    dest = db.db_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(delete=False, dir=dest.parent, suffix=".tmp") as tf:
         tf.write(blob)

@@ -15,6 +15,7 @@ from .compute.engine import PobEngine
 from .compute.pob_code import decode_code, is_link, to_xml
 from .knowledge import db as corpus
 from .live import prices as live_prices
+from .live import update as live_update
 from .live import version as live_version
 
 mcp = FastMCP("poe2-build-mcp")
@@ -30,6 +31,15 @@ def get_engine() -> PobEngine:
         if _engine is None or _engine.proc.poll() is not None:
             _engine = PobEngine()
         return _engine
+
+
+def _reset_engine() -> None:
+    """Close the shared engine so the next call respawns it (e.g. after an update)."""
+    global _engine
+    with _engine_lock:
+        if _engine is not None:
+            _engine.close()
+            _engine = None
 
 
 def _source_to_xml(source: str) -> str:
@@ -338,15 +348,32 @@ def check_data_version() -> dict[str, Any]:
 
 @mcp.tool()
 def update_corpus(rebuild_from_source: bool = False) -> dict[str, Any]:
-    """Update the bundled game-data corpus.
+    """Rebuild the game-data corpus locally from RePoE (power-user / offline path).
 
-    Pass rebuild_from_source=true to re-fetch RePoE and rebuild the corpus locally.
-    (Downloading a prebuilt corpus from a published release will be enabled once releases exist.)
+    Most users don't need this — the server auto-updates from validated releases. Pass
+    rebuild_from_source=true to re-fetch RePoE and rebuild the corpus right now.
     """
     return live_version.update_corpus(rebuild_from_source=rebuild_from_source)
 
 
+@mcp.tool()
+def check_for_updates() -> dict[str, Any]:
+    """Check whether a newer validated release (engine + corpus) is available to install."""
+    return live_update.check_for_updates()
+
+
+@mcp.tool()
+def apply_updates() -> dict[str, Any]:
+    """Download and install the latest validated release (engine + corpus) now."""
+    res = live_update.apply_updates()
+    if res.get("updated"):
+        _reset_engine()
+    return res
+
+
 def main() -> None:
+    # Best-effort, throttled auto-update in the background; never blocks startup.
+    threading.Thread(target=live_update.auto_update, args=(_reset_engine,), daemon=True).start()
     mcp.run()
 
 

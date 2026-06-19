@@ -12,21 +12,25 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = REPO_ROOT / "data" / "corpus.sqlite"
+from .. import paths
 
 _con: sqlite3.Connection | None = None
+
+
+def db_path() -> Path:
+    """Active corpus DB path: the auto-updated user copy if present, else the bundled seed."""
+    return paths.corpus_path()
 
 
 def _conn() -> sqlite3.Connection:
     global _con
     if _con is None:
-        if not DB_PATH.exists():
+        p = db_path()
+        if not p.exists():
             raise FileNotFoundError(
-                f"corpus DB not found at {DB_PATH}. "
-                "Build it with: uv run python -m pipeline.build_corpus"
+                f"corpus DB not found at {p}. Build it with: uv run python -m pipeline.build_corpus"
             )
-        _con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
+        _con = sqlite3.connect(f"file:{p}?mode=ro", uri=True, check_same_thread=False)
         _con.row_factory = sqlite3.Row
     return _con
 

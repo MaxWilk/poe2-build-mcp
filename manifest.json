@@ -15,6 +15,7 @@
       "command": "python",
       "args": ["-m", "server.main"],
       "env": {
+        "PYTHONPATH": "${__dirname}",
         "POB_LUAJIT": "${user_config.luajit_path}"
       }
     }

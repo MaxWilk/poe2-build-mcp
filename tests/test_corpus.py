@@ -7,7 +7,7 @@ import pytest
 from server.knowledge import db
 
 pytestmark = pytest.mark.skipif(
-    not db.DB_PATH.exists(),
+    not db.db_path().exists(),
     reason="corpus not built (run: uv run python -m pipeline.build_corpus)",
 )
 

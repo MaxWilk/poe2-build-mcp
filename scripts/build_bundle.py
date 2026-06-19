@@ -1,0 +1,111 @@
+"""Assemble a self-contained poe2-build-mcp bundle and zip it to a `.mcpb`.
+
+Stages the server, the PoB engine subset (src + runtime/lua + headless shim), the corpus,
+vendored Python deps, and — if present at runtime/luajit/<platform>/ — a per-OS LuaJIT binary.
+Then zips everything to dist/poe2-build-mcp-<platform>.mcpb.
+
+Run per-OS (locally or in CI). LuaJIT is supplied by the caller/CI in runtime/luajit/<platform>/
+(the server auto-detects a bundled binary there via server/paths.py).
+
+    uv run python scripts/build_bundle.py --version 2026.06.19
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import subprocess
+import sys
+import zipfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PLATFORM = {"win32": "win-x64", "darwin": "mac-arm64", "linux": "linux-x64"}
+
+
+def _copy(src: Path, dst: Path) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if src.is_dir():
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    else:
+        shutil.copy2(src, dst)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--version", default="dev", help="bundle/data version stamp")
+    ap.add_argument("--platform", default=PLATFORM.get(sys.platform, "unknown"))
+    ap.add_argument("--out", default=str(ROOT / "dist"))
+    args = ap.parse_args()
+
+    corpus = ROOT / "data" / "corpus.sqlite"
+    if not corpus.exists():
+        print("corpus missing; building it…")
+        subprocess.run([sys.executable, "-m", "pipeline.build_corpus"], check=True, cwd=ROOT)
+
+    stage = Path(args.out) / f"bundle-{args.platform}"
+    if stage.exists():
+        shutil.rmtree(stage)
+    stage.mkdir(parents=True)
+
+    # Server code + manifest
+    _copy(ROOT / "server", stage / "server")
+    _copy(ROOT / "manifest.json", stage / "manifest.json")
+
+    # Bundled seed data
+    _copy(corpus, stage / "data" / "corpus.sqlite")
+    (stage / "data" / "VERSION").write_text(args.version)
+
+    # PoB engine (the parts the headless engine needs at runtime)
+    _copy(ROOT / "pob" / "pob_headless.lua", stage / "pob" / "pob_headless.lua")
+    _copy(ROOT / "pob" / "PINNED.md", stage / "pob" / "PINNED.md")
+    pob = ROOT / "pob" / "PathOfBuilding-PoE2"
+    _copy(pob / "src", stage / "pob" / "PathOfBuilding-PoE2" / "src")
+    _copy(pob / "runtime" / "lua", stage / "pob" / "PathOfBuilding-PoE2" / "runtime" / "lua")
+
+    # Vendor Python dependencies into lib/ (manifest puts this on PYTHONPATH).
+    # Prefer uv (present in CI) for speed; fall back to pip.
+    print("vendoring python deps into lib/ …")
+    uv = shutil.which("uv")
+    if uv:
+        cmd = [uv, "pip", "install", "--target", str(stage / "lib"), "mcp>=1.2"]
+    else:
+        cmd = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "--target",
+            str(stage / "lib"),
+            "mcp>=1.2",
+        ]
+    subprocess.run(cmd, check=True)
+
+    # Per-OS LuaJIT binary, if provided (CI builds this).
+    luajit = ROOT / "runtime" / "luajit" / args.platform
+    if luajit.exists():
+        _copy(luajit, stage / "runtime" / "luajit" / args.platform)
+    else:
+        print(
+            f"NOTE: no LuaJIT at runtime/luajit/{args.platform}/ — bundle will need a system LuaJIT."
+        )
+
+    # Zip to .mcpb
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    mcpb = out / f"poe2-build-mcp-{args.platform}.mcpb"
+    if mcpb.exists():
+        mcpb.unlink()
+    with zipfile.ZipFile(mcpb, "w", zipfile.ZIP_DEFLATED) as zf:
+        for p in stage.rglob("*"):
+            if p.is_file():
+                zf.write(p, p.relative_to(stage))
+
+    print(f"\nbundle: {mcpb}  ({mcpb.stat().st_size / 1e6:.1f} MB)")
+    print(f"staging: {stage}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
