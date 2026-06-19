@@ -168,6 +168,24 @@ function methods.set_class(p)
 	}
 end
 
+-- Set the character level (1-100). Disables auto-leveling so the value sticks.
+function methods.set_level(p)
+	local lvl = tonumber(p and p.level)
+	if not lvl then
+		return { ok = false, error = "set_level requires numeric params.level" }
+	end
+	lvl = math.max(1, math.min(100, math.floor(lvl)))
+	build.characterLevelAutoMode = false
+	build.characterLevel = lvl
+	if build.controls and build.controls.characterLevel then
+		build.controls.characterLevel:SetText(tostring(lvl))
+	end
+	build.buildFlag = true
+	build.modFlag = true
+	runCallback("OnFrame")
+	return { ok = true, level = build.characterLevel, stats = collectStats(p.keys) }
+end
+
 function methods.load_build_xml(p)
 	assert(p and p.xml, "load_build_xml requires params.xml")
 	loadBuildFromXML(p.xml, p.name or "imported")

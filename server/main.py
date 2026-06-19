@@ -87,6 +87,12 @@ def set_class(class_name: str, ascendancy: str | None = None) -> dict[str, Any]:
 
 
 @mcp.tool()
+def set_level(level: int) -> dict[str, Any]:
+    """Set the active build's character level (1-100). Returns updated stats."""
+    return get_engine().set_level(level)
+
+
+@mcp.tool()
 def set_skill(skill: str) -> dict[str, Any]:
     """Set the active build's main skill using Path of Building's paste format.
 

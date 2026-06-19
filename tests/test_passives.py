@@ -47,3 +47,11 @@ def test_set_class_and_ascendancy(engine):
 def test_set_class_unknown(engine):
     engine.new_build()
     assert engine.set_class("Notaclass")["ok"] is False
+
+
+def test_set_level(engine):
+    engine.new_build()
+    base = engine.get_stats(["Life"])["stats"]["Life"]
+    r = engine.set_level(90)
+    assert r["ok"] and r["level"] == 90
+    assert r["stats"]["Life"] > base  # higher level => more life (auto-leveling disabled)

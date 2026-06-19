@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A queryable Path of Exile 2 game corpus plus Path-of-Building-faithful calculations: import builds, theorycraft, search items/gems/mods/uniques/passives, optimize, and check live prices.",
   "author": {
     "name": "hotkeysgamesllc"
@@ -33,6 +33,7 @@
     { "name": "get_build_stats", "description": "PoB-computed stats for the active build." },
     { "name": "set_skill", "description": "Set the active build's main skill." },
     { "name": "set_class", "description": "Set character class + ascendancy from scratch." },
+    { "name": "set_level", "description": "Set character level (1-100)." },
     { "name": "set_config", "description": "Set combat config and/or extra modifiers." },
     { "name": "equip_item", "description": "Equip an item from raw PoB item text." },
     { "name": "evaluate_build", "description": "Check the build against numeric goals." },
