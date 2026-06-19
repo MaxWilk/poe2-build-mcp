@@ -85,7 +85,8 @@ def search_items(query: str = "", item_class: str | None = None, limit: int = 20
     if item_class:
         sql += "AND i.item_class = ? "
         params.append(item_class)
-    sql += "LIMIT ?"
+    # highest-tier (endgame) bases first — what build crafting usually wants
+    sql += "ORDER BY i.drop_level DESC LIMIT ?"
     params.append(limit)
     return [
         {

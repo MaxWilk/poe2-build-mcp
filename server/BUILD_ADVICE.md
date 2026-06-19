@@ -13,6 +13,27 @@ engine (`get_build_stats` / `get_defenses`), and keep it only if it improves the
 Optimization is finding the build's *weakest layer* and spending the cheapest points/currency to
 raise it — not maximizing the number that's already highest.
 
+## What "done" looks like — targets, not vibes
+
+A build is a **draft** until it clears this bar. Don't present one as finished until it does
+(check with `get_defenses` + `evaluate_build`):
+
+- **Resistances capped.** Fire/Cold/Lightning at 75% (over-cap is buffer); chaos positive. Non-negotiable.
+- **A full gear set.** Every slot filled — weapon(s), helmet, body, gloves, boots, belt, amulet,
+  two rings. A build with 2 of ~10 slots is a *skeleton*, not a build.
+- **A real hit pool.** A meaningful Life and/or ES pool — thousands for endgame, not the few
+  hundred a fresh character starts with.
+- **Enough DPS for the target content.** "Enough" is relative: mapping needs far less than
+  pinnacle bosses. The test is *time-to-kill on the content the player wants*, not a fixed number.
+  If unsure, ask what content they're aiming at, or compare against a known-good reference build.
+- **Sustain.** The build can actually use its skill (mana/spirit covered by pool + regen/leech),
+  with recovery beyond flasks.
+
+**Reality check:** a from-scratch build with one weapon, a couple of notables, uncapped resists,
+and a few-hundred life pool is a skeleton that validates the *workflow* — it is **not** finished,
+and it's typically *orders of magnitude* behind a min-maxed meta build (DPS and EHP). Say so
+plainly; never present a skeleton as "done".
+
 ---
 
 ## Defense: the survival checklist

@@ -67,6 +67,18 @@ def _roll_in(ranges: list[dict], nums: list[float]) -> bool:
     return all(r["min"] <= n <= r["max"] for r, n in zip(rs, nums))
 
 
+def _resist_group(line: str) -> str | None:
+    """The real group label for a resistance line (the corpus stores single-element resists
+    generically, so without this all three would report as 'FireResistance')."""
+    low = line.lower()
+    if "all elemental resistance" in low:
+        return "AllElementalResistance"
+    for el in ("fire", "cold", "lightning", "chaos"):
+        if f"{el} resistance" in low:
+            return el.capitalize() + "Resistance"
+    return None
+
+
 def _range_str(ranges: list[dict]) -> str | None:
     parts = [f"{r['min']}-{r['max']}" for r in ranges if r.get("min") is not None and r.get("max")]
     return " / ".join(parts) if parts else None
@@ -94,6 +106,7 @@ def classify_affix(line: str) -> dict[str, Any] | None:
         rk = (c["required_level"], tuple((r.get("min"), r.get("max")) for r in c["ranges"]))
         by_group[gkey].setdefault(rk, c)
     nums = _values(line)
+    label = _resist_group(line)  # use the real element for resist lines (corpus stores generic)
     fallback: dict[str, Any] | None = None
     for gkey, uniq in by_group.items():
         mods = sorted(uniq.values(), key=lambda m: -(m["required_level"] or 0))  # T1 = highest req
@@ -105,7 +118,7 @@ def classify_affix(line: str) -> dict[str, Any] | None:
                     "totalTiers": len(mods),
                     "tierRange": _range_str(m["ranges"]),
                     "requiredLevel": m["required_level"],
-                    "group": gkey,
+                    "group": label or gkey,
                 }
         if fallback is None and mods:  # recognized but roll out of known ranges (e.g. quality)
             top = mods[0]
@@ -115,7 +128,7 @@ def classify_affix(line: str) -> dict[str, Any] | None:
                 "totalTiers": len(mods),
                 "tierRange": None,
                 "requiredLevel": top["required_level"],
-                "group": gkey,
+                "group": label or gkey,
             }
     return fallback
 

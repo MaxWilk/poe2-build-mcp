@@ -65,6 +65,8 @@ def _seg(metadata_id: str) -> str:
 LINK_RE = re.compile(r"\[([^\]|]+)(?:\|[^\]]+)?\]")
 CURLY_RE = re.compile(r"\{[^}]*\}")
 BLOCK_RE = re.compile(r"\[\[(.*?)\]\]", re.DOTALL)
+# PoB metadata lines inside a unique block that aren't readable mods (drop from the text).
+UNIQUE_META_RE = re.compile(r"^(Variant:|Selected Variant:|Implicits:|Has Alt Variant)")
 
 
 def clean_text(t: str) -> str:
@@ -83,7 +85,11 @@ def parse_uniques() -> list[dict]:
     for path in sorted(UNIQUES_DIR.glob("*.lua")):
         item_type = path.stem
         for block in BLOCK_RE.findall(path.read_text("utf-8")):
-            lines = [ln for ln in (x.rstrip() for x in block.strip("\n").split("\n")) if ln.strip()]
+            lines = [
+                ln
+                for ln in (x.rstrip() for x in block.strip("\n").split("\n"))
+                if ln.strip() and not UNIQUE_META_RE.match(ln.strip())
+            ]
             if len(lines) < 2:
                 continue
             name = clean_mod_line(lines[0])
@@ -140,6 +146,9 @@ def build() -> dict[str, int]:
         name = it.get("name") or _seg(mid)
         item_class = it.get("item_class", "") or ""
         tags = it.get("tags") or []
+        # drop unobtainable/special bases (demigod uniques, unreleased) that only add search noise
+        if "demigods" in tags or it.get("release_state") == "unreleased":
+            continue
         cur.execute(
             "INSERT INTO items(id,name,item_class,drop_level,tags,raw) VALUES(?,?,?,?,?,?)",
             (mid, name, item_class, it.get("drop_level"), json.dumps(tags), json.dumps(it)),
@@ -153,6 +162,9 @@ def build() -> dict[str, int]:
     n_gems = 0
     for mid, g in skill_gems.items():
         name = g["base_item"]["display_name"]
+        # skip dev/placeholder gems ("[DNT...]") and unreleased ones
+        if name.upper().startswith("[DNT") or g["base_item"].get("release_state") == "unreleased":
+            continue
         tags = g.get("tags") or []
         grants = g.get("grants_skills") or []
         supports = [

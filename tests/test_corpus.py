@@ -69,6 +69,28 @@ def test_classify_affix_phys_damage():
     assert r and r["type"] == "prefix" and r["tierRange"] == "110-134"
 
 
+def test_corpus_filters_dev_and_special():
+    import sqlite3
+
+    con = sqlite3.connect(f"file:{db.db_path()}?mode=ro", uri=True)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM gems WHERE name LIKE '%DNT%'").fetchone()[0] == 0
+        assert (
+            con.execute("SELECT COUNT(*) FROM items WHERE tags LIKE '%demigods%'").fetchone()[0]
+            == 0
+        )
+    finally:
+        con.close()
+
+
+def test_parse_item_resist_group_labels():
+    from server.knowledge import itemparse as ip
+
+    # single-element resists are stored generically in the corpus; we relabel by actual element
+    assert ip.classify_affix("+27% to Cold Resistance")["group"] == "ColdResistance"
+    assert ip.classify_affix("+18% to Lightning Resistance")["group"] == "LightningResistance"
+
+
 def test_parse_item_tiers_and_open_slots():
     from server.knowledge import itemparse as ip
 

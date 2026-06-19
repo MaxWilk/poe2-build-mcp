@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import json
 import urllib.request
+from datetime import datetime, timezone
 from typing import Any
+
+from .. import paths
 
 URL = "https://poe.ninja/poe2/api/data/build-index-state"
 # poe.ninja's edge rejects some non-browser clients, so present a browser-like UA.
@@ -104,6 +107,53 @@ def shape(data: Any, league: str | None = None, limit: int = 15) -> dict[str, An
     }
 
 
+def _cache_path():
+    return paths.user_data_dir() / "meta_cache.json"
+
+
+def _write_cache(data: Any) -> None:
+    try:
+        p = _cache_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(
+            json.dumps(
+                {
+                    "data": data,
+                    "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                }
+            ),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def _read_cache() -> dict | None:
+    try:
+        return json.loads(_cache_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def get_meta_builds(league: str | None = None, limit: int = 15) -> dict[str, Any]:
-    """Ascendancy popularity for a league (default the current challenge league)."""
-    return shape(_fetch(), league=league, limit=limit)
+    """Ascendancy popularity for a league (default the current challenge league).
+
+    On a successful fetch the snapshot is cached; if poe.ninja is later unreachable we fall back
+    to that last-good snapshot (flagged `stale`) instead of returning nothing.
+    """
+    try:
+        data = _fetch()
+    except MetaError:
+        cached = _read_cache()
+        if cached and cached.get("data"):
+            r = shape(cached["data"], league=league, limit=limit)
+            if r.get("ok"):
+                r["stale"] = True
+                r["fetchedAt"] = cached.get("fetched_at")
+                r["note"] = "poe.ninja unreachable — last cached snapshot (may be stale). " + r.get(
+                    "note", ""
+                )
+            return r
+        raise
+    _write_cache(data)
+    return shape(data, league=league, limit=limit)

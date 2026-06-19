@@ -71,7 +71,7 @@ engine confirms the effect.
 - `solve_for(metric, target, lever)` — root-find the modifier magnitude needed to hit a stat target
 - `search_passives(query?, node_type?)` / `get_passive(node)`
 - `alloc_passive(node)` / `dealloc_passive(node)` — allocate/route by id or name, with deltas
-- `optimize_passives(metric, points)` — greedy point allocation to maximize a stat
+- `optimize_passives(metric, points)` — greedy point allocation (`metric="balanced"` raises DPS+EHP)
 - `engine_health()` — engine + install diagnostics (liveness, LuaJIT/tree/data/server versions)
 
 *Corpus / knowledge — bundled SQLite + FTS, no engine needed:*

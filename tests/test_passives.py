@@ -129,6 +129,25 @@ def test_points_available_scales_with_level(engine):
     assert a90 > a20 > 0
 
 
+def test_attack_skill_no_weapon_warning(engine):
+    engine.new_build()
+    engine.set_class("Monk", "Martial Artist")
+    r = engine.paste_skill("Tempest Flurry 20/0  1")  # attack skill, no weapon
+    assert r.get("warning") and "weapon" in r["warning"].lower()
+    engine.add_item("Rarity: Rare\nX\nSteelpoint Quarterstaff\n120% increased Physical Damage")
+    assert engine.get_stats(["TotalDPS"]).get("warning") is None  # cleared once armed
+
+
+def test_optimize_balanced_raises_offense_and_defense(engine):
+    engine.new_build()
+    engine.set_class("Monk", "Martial Artist")
+    engine.set_level(90)
+    engine.paste_skill("Tempest Flurry 20/0  1")
+    engine.add_item("Rarity: Rare\nX\nSteelpoint Quarterstaff\n120% increased Physical Damage")
+    r = engine.optimize_passives(metric="balanced", points=12)
+    assert r["finalDPS"] > r["startDPS"] and r["finalEHP"] > r["startEHP"]
+
+
 def test_engine_reports_tree_version(engine):
     # the ready frame surfaces the passive-tree data version (used by engine_health)
     assert engine.info.get("treeVersion")

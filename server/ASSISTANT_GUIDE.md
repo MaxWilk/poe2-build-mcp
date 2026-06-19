@@ -78,6 +78,25 @@ to A/B against another code and report the deltas.
 current build. It reports a *requirement*, so confirm it's attainable (`search_mods` /
 `find_supports_for`) and that it doesn't wreck survivability (`get_defenses`).
 
+## Don't present a draft as a finished build
+
+The tools succeeding is **not** the same as the build being good. Before you call a build done:
+
+1. **Meet a real bar.** Resistances capped, a *full* gear set (not 2 of ~10 slots), a real
+   Life/ES pool, DPS that clears the player's target content, and sustain — see
+   `build_advice("targets")`. A from-scratch build with one weapon and a few notables is a
+   *skeleton*, and it's typically **orders of magnitude** behind a min-maxed meta build.
+2. **Run the gate.** Set explicit goals up front (anchored to the player's content — mapping vs
+   bossing) and `evaluate_build` against them. If it fails, keep building or say plainly what's
+   missing — never present a failing build as finished.
+3. **Sanity-check before presenting.** Walk `build_advice("red flags")`, and for a from-scratch
+   build `compare_to` a known-good/meta build when you have one. Do this proactively.
+4. **Track gear completeness.** `get_build` shows filled slots; empty slots = incomplete.
+
+When a build is partial, say so explicitly ("draft — still needs gear in X/Y, resists uncapped,
+EHP low"), never imply it's finished. Use `optimize_passives(metric="balanced")` to raise offense
+and defense together instead of glass-cannoning a single stat.
+
 ## Gotchas that will trip you up
 
 - **Resistances look deeply negative on a fresh character — that's expected, not a bug.** PoB
@@ -90,6 +109,13 @@ current build. It reports a *requirement*, so confirm it's attainable (`search_m
   just equip the new item.
 - **Stat keys are PoB-internal** (`TotalDPS`, `EnergyShield`, `Life`, `TotalEHP`, `Speed`, …).
   Pass them to `get_build_stats`/`get_defenses` when you need specific values.
+- **Attack skills need a weapon.** Equip a weapon (Weapon 1) *before* judging an attack build's
+  DPS — without one it computes ~0 DPS. `set_skill`/`get_build_stats` return a `warning` when the
+  main skill is an Attack and no weapon is equipped; don't mistake that 0 for a bug.
+- **Finding things:** `find_skills` searches *gems*; `search_items` searches *item bases*. Use
+  `search_items` (not `find_skills`) for a weapon/armour base.
+- **Check sustain:** compare `ManaCost` to the build's Mana + regen/leech (and Spirit for
+  reservations) so the build can actually cast its own skill.
 - **Pricing is league-specific.** Use `list_price_leagues` if unsure which league to query.
 - **Meta is context, not a target.** `get_meta_builds` shows what's *popular* on the ladder,
   not what's best for the player. **Build to the user's stated goal first.** Don't steer every

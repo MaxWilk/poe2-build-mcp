@@ -97,6 +97,37 @@ local function mainSkillName()
 	return nil
 end
 
+-- An Attack skill computes ~no damage without a weapon; flag it so a 0-DPS result from a fresh
+-- attack build isn't mistaken for a bug (a common confusion when building from scratch).
+local function attackWeaponWarning()
+	local sg = build.skillsTab.socketGroupList[build.mainSocketGroup or 1]
+	if not (sg and sg.displaySkillList and sg.mainActiveSkill) then
+		return nil
+	end
+	local s = sg.displaySkillList[sg.mainActiveSkill]
+	local ge = s and s.activeEffect and s.activeEffect.grantedEffect
+	local attackType = (SkillType and SkillType.Attack) or 1
+	if not (ge and ge.skillTypes and ge.skillTypes[attackType]) then
+		return nil
+	end
+	local slot = build.itemsTab.slots["Weapon 1"]
+	if slot and slot.selItemId and slot.selItemId ~= 0 then
+		return nil
+	end
+	return "Main skill is an Attack but no weapon is equipped (Weapon 1) — its DPS is ~0 until "
+		.. "you equip a weapon (equip_item)."
+end
+
+-- Standard {mainSkill, stats} response, with a warning attached when one applies.
+local function statResult(keys)
+	local r = { mainSkill = mainSkillName(), stats = collectStats(keys) }
+	local w = attackWeaponWarning()
+	if w then
+		r.warning = w
+	end
+	return r
+end
+
 local function selectMainSocketGroup(index)
 	index = index or 1
 	build.mainSocketGroup = index
@@ -230,16 +261,16 @@ function methods.paste_skill(p)
 	build.skillsTab:PasteSocketGroup(p.text)
 	runCallback("OnFrame")
 	selectMainSocketGroup(p.socketGroup or #build.skillsTab.socketGroupList)
-	return { mainSkill = mainSkillName(), stats = collectStats(p.keys) }
+	return statResult(p.keys)
 end
 
 function methods.set_main_socket_group(p)
 	selectMainSocketGroup(p and p.index or 1)
-	return { mainSkill = mainSkillName(), stats = collectStats(p and p.keys) }
+	return statResult(p and p.keys)
 end
 
 function methods.get_stats(p)
-	return { mainSkill = mainSkillName(), stats = collectStats(p and p.keys) }
+	return statResult(p and p.keys)
 end
 
 -- Serialize the current build to PoB XML (same payload PoB compresses into a share code).
@@ -598,6 +629,9 @@ end
 function methods.optimize_passives(p)
 	p = p or {}
 	local metric = p.metric or "TotalDPS"
+	-- "balanced" (alias "DPS+EHP") scores each candidate by its *relative* TotalDPS + TotalEHP
+	-- improvement, so a single pass raises both offense and defense instead of glass-cannoning.
+	local balanced = (metric == "balanced" or metric == "DPS+EHP")
 	-- points <= 0 means "use the remaining budget at this level" (level-aware optimize).
 	local budget = p.points
 	if not budget or budget <= 0 then
@@ -606,13 +640,16 @@ function methods.optimize_passives(p)
 	local cap = p.candidates or 50
 	local nodeType = p.node_type or "Notable"
 	local spec = build.spec
-	local startValue = (build.calcsTab.mainOutput[metric]) or 0
+	local mo0 = build.calcsTab.mainOutput
+	local startDPS, startEHP = (mo0.TotalDPS) or 0, (mo0.TotalEHP) or 0
+	local startValue = balanced and 0 or ((mo0[metric]) or 0)
 	local chosen = {}
 	local used = 0
 
 	while budget > 0 do
 		local calcFunc, calcBase = build.calcsTab:GetMiscCalculator(build)
 		local baseVal = (calcBase[metric]) or 0
+		local baseDPS, baseEHP = (calcBase.TotalDPS) or 0, (calcBase.TotalEHP) or 0
 
 		local cands = {}
 		for _, node in pairs(spec.nodes) do
@@ -639,7 +676,14 @@ function methods.optimize_passives(p)
 			end
 			pathNodes[node] = true
 			local out = calcFunc({ addNodes = pathNodes })
-			local gain = ((out[metric]) or 0) - baseVal
+			local gain
+			if balanced then
+				local dD = baseDPS > 0 and (((out.TotalDPS or 0) - baseDPS) / baseDPS) or 0
+				local dE = baseEHP > 0 and (((out.TotalEHP or 0) - baseEHP) / baseEHP) or 0
+				gain = dD + dE
+			else
+				gain = ((out[metric]) or 0) - baseVal
+			end
 			if gain > 0 and (not best or gain > bestGain) then
 				best, bestGain, bestCost = node, gain, node.pathDist
 			end
@@ -654,13 +698,19 @@ function methods.optimize_passives(p)
 		budget = budget - bestCost
 	end
 
-	return {
+	local mo1 = build.calcsTab.mainOutput
+	local result = {
 		metric = metric,
 		startValue = startValue,
-		finalValue = (build.calcsTab.mainOutput[metric]) or startValue,
+		finalValue = balanced and 0 or ((mo1[metric]) or startValue),
 		pointsUsed = used,
 		allocated = chosen,
 	}
+	if balanced then
+		result.startDPS, result.finalDPS = startDPS, (mo1.TotalDPS) or startDPS
+		result.startEHP, result.finalEHP = startEHP, (mo1.TotalEHP) or startEHP
+	end
+	return result
 end
 
 -- ---------------------------------------------------------------------------

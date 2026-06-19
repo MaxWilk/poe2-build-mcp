@@ -114,9 +114,15 @@ def get_prices(
         raise PriceError(f"unknown kind {kind!r} (use 'currency' or 'unique')")
 
     results.sort(key=lambda r: (r.get("price") is None, -(r.get("price") or 0)))
-    return {
+    out: dict[str, Any] = {
         "league": info["name"],
         "base_currency": info["base"],
         "kind": kind,
         "results": results[:limit],
     }
+    if kind == "unique" and query and not results:
+        out["note"] = (
+            "No matches — unique pricing matches by item NAME (e.g. 'Matsya'), not a base type "
+            "or category. Try the unique's name."
+        )
+    return out

@@ -329,10 +329,12 @@ def optimize_passives(
     """Greedily allocate passive points to maximize a stat on the active build.
 
     Spends up to `points` points, each step allocating the reachable node (and its path) that
-    most improves `metric` (e.g. "TotalDPS", "Life", "TotalEHP"). Pass `points=0` to use the
-    full remaining point budget at the character's current level (slower). `node_type` defaults
-    to "Notable". Returns the chosen nodes with per-step gains and start/final metric values.
-    This is a bounded greedy search, not a guaranteed global optimum.
+    most improves `metric` (e.g. "TotalDPS", "Life", "TotalEHP"). Use `metric="balanced"` to
+    raise offense AND defense together (scores nodes by relative TotalDPS + TotalEHP gain, so it
+    won't glass-cannon) — it returns start/final DPS and EHP. Pass `points=0` to use the full
+    remaining point budget at the character's current level (slower). `node_type` defaults to
+    "Notable". Returns the chosen nodes with per-step gains. Bounded greedy search, not a
+    guaranteed global optimum.
     """
     return get_engine().optimize_passives(
         metric=metric, points=points, node_type=node_type, candidates=candidates
@@ -627,11 +629,16 @@ def build_from_goal(goal: str, character_class: str = "") -> str:
     cls = f" Start from the {character_class} class." if character_class else ""
     return (
         f"Create a Path of Exile 2 build for this goal:\n\n{goal}\n{cls}\n\n"
-        "Follow create → validate → cost → present: set_class, set_level, set_skill (use "
-        "find_supports_for to pick supports), allocate the tree with optimize_passives / "
-        "alloc_passive, equip gear with equip_item, then CONFIRM it meets the goal with "
-        "get_defenses and evaluate_build. Check affordability with get_prices. Present the "
-        "result with export_build, and flag (don't recommend) anything that fails evaluate_build."
+        "Follow create → validate → cost → present: set_class → set_level → set_skill (use "
+        "find_supports_for for supports) → for an attack skill equip a weapon FIRST (equip_item) "
+        "so DPS computes → allocate the tree (optimize_passives, including metric='balanced' to "
+        "raise offense AND defense) → gear EVERY slot for capped resists and a real Life/ES pool.\n\n"
+        "A build is NOT done until it clears a real bar (see build_advice('targets')): resists "
+        "capped, a full gear set, a meaningful hit pool, DPS that clears the player's content, and "
+        "sustain. CONFIRM with get_defenses + evaluate_build against explicit goals; sanity-check "
+        "with build_advice('red flags') and, if you have one, compare_to a known-good build. Check "
+        "cost with get_prices and present with export_build. If the build is a partial skeleton or "
+        "fails the goal, say so plainly — never present a draft or a failing build as finished."
     )
 
 
