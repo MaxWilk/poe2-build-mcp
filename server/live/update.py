@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -29,6 +30,11 @@ MANIFEST_URL = os.environ.get(
 )
 CHECK_INTERVAL_SECONDS = 24 * 3600
 UA = {"User-Agent": "poe2-build-mcp-updater/0.1"}
+
+
+def _vkey(version: str) -> tuple[int, ...]:
+    """Numeric version key so v0.10.0 > v0.2.0 (lexicographic compare would get this wrong)."""
+    return tuple(int(n) for n in re.findall(r"\d+", version or "")) or (0,)
 
 
 def _http(url: str, timeout: float = 60.0) -> bytes:
@@ -70,7 +76,7 @@ def check_for_updates() -> dict[str, Any]:
         }
     latest = str(manifest.get("version", "0"))
     return {
-        "available": latest > current,
+        "available": _vkey(latest) > _vkey(current),
         "current_version": current,
         "latest_version": latest,
         "pob_commit": manifest.get("pob_commit"),
@@ -88,7 +94,7 @@ def apply_updates(force: bool = False) -> dict[str, Any]:
         return {"updated": False, "reason": "no release manifest reachable"}
     latest = str(manifest.get("version", "0"))
     current = installed_version()
-    if not force and latest <= current:
+    if not force and _vkey(latest) <= _vkey(current):
         return {"updated": False, "reason": "already up to date", "version": current}
 
     data_dir = paths.user_data_dir()

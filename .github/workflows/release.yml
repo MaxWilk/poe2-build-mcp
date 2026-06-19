@@ -49,7 +49,7 @@ jobs:
         run: |
           git clone https://github.com/LuaJIT/LuaJIT luajit-src
           cd luajit-src && git checkout "$LUAJIT_COMMIT" && make
-          dest="$GITHUB_WORKSPACE/runtime/luajit/win-x64"
+          dest="$(cygpath -u "$GITHUB_WORKSPACE")/runtime/luajit/win-x64"
           mkdir -p "$dest" && cp src/luajit.exe "$dest/"
           # bundle the mingw runtime DLLs luajit.exe links against
           ldd src/luajit.exe | awk '/ucrt64/{print $3}' | xargs -I{} cp {} "$dest/" || true
@@ -72,6 +72,7 @@ jobs:
 
   update-assets:
     # Publishes the self-update payload (engine + corpus) and the manifest update.py reads.
+    needs: bundles
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +88,8 @@ jobs:
           zip -r rel/pob-engine.zip \
             pob/pob_headless.lua \
             pob/PathOfBuilding-PoE2/src \
-            pob/PathOfBuilding-PoE2/runtime/lua
+            pob/PathOfBuilding-PoE2/runtime/lua \
+            -x '*.zst' '*.dds' '*.png' '*.jpg' '*.jpeg' '*.tga' '*.gif' '*.bk2' '*.mp4' '*.ogg' '*.mp3'
           POB_COMMIT=$(git -C pob/PathOfBuilding-PoE2 rev-parse --short HEAD)
           BASE="https://github.com/${{ github.repository }}/releases/latest/download"
           python - "$POB_COMMIT" "$BASE" <<'PY'
