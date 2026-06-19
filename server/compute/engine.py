@@ -189,6 +189,15 @@ class PobEngine:
     def get_xml(self) -> str:
         return self.call("get_xml")["xml"]
 
+    def get_build(self) -> dict[str, Any]:
+        return self.call("get_build")
+
+    def unequip_item(self, slot: str) -> dict[str, Any]:
+        return self.call("unequip_item", slot=slot)
+
+    def list_config_options(self, query: str = "", limit: int = 60) -> dict[str, Any]:
+        return self.call("list_config_options", query=query, limit=limit)
+
     def load_build_code(self, code: str, name: str = "imported") -> dict[str, Any]:
         """Import a PoB share code (inflated to XML in Python, then loaded)."""
         from .pob_code import decode_code

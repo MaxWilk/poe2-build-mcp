@@ -55,3 +55,27 @@ def test_set_level(engine):
     r = engine.set_level(90)
     assert r["ok"] and r["level"] == 90
     assert r["stats"]["Life"] > base  # higher level => more life (auto-leveling disabled)
+
+
+def test_get_build_readback(engine):
+    engine.new_build()
+    engine.set_class("Mercenary", "Witchhunter")
+    engine.set_level(90)
+    engine.paste_skill("Detonate Living 20/0  1")
+    b = engine.get_build()
+    assert b["class"] == "Mercenary" and b["ascendancy"] == "Witchhunter" and b["level"] == 90
+    assert b["mainSkill"] == "Detonate Living"
+
+
+def test_list_config_options(engine):
+    opts = engine.list_config_options(query="boss")["options"]
+    assert any(o["var"] == "enemyIsBoss" for o in opts)
+
+
+def test_equip_then_unequip(engine):
+    engine.new_build()
+    engine.paste_skill("Fireball 20/0  1")
+    engine.add_item("Rarity: Rare\nR\nRuby Ring\n+50 to maximum Life")
+    assert "Ring 1" in engine.get_build()["gear"]
+    engine.unequip_item("Ring 1")
+    assert "Ring 1" not in engine.get_build()["gear"]

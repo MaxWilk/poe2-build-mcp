@@ -12,7 +12,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .compute.engine import PobEngine
-from .compute.pob_code import decode_code, is_link, to_xml
+from .compute.pob_code import decode_code, encode_code, is_link, to_xml
 from .knowledge import db as corpus
 from .live import prices as live_prices
 from .live import update as live_update
@@ -76,6 +76,26 @@ def get_build_stats(keys: list[str] | None = None) -> dict[str, Any]:
 
 
 @mcp.tool()
+def get_build() -> dict[str, Any]:
+    """Full read-back of the active build.
+
+    Returns class/level/ascendancy, the main skill group (gems + levels), allocated
+    notables/keystones/ascendancy nodes, equipped gear by slot, passive points used, and
+    summary stats — so you can see the whole build you've assembled.
+    """
+    return get_engine().get_build()
+
+
+@mcp.tool()
+def export_build() -> dict[str, Any]:
+    """Export the active build as a Path of Building import code.
+
+    Paste the returned `code` into Path of Building (Import/Export → Import) or share it.
+    """
+    return {"code": encode_code(get_engine().get_xml())}
+
+
+@mcp.tool()
 def set_class(class_name: str, ascendancy: str | None = None) -> dict[str, Any]:
     """Set the active build's character class and (optionally) ascendancy from scratch.
 
@@ -117,6 +137,17 @@ def set_config(
 
 
 @mcp.tool()
+def list_config_options(query: str = "", limit: int = 60) -> dict[str, Any]:
+    """List Path of Building configuration options usable with `set_config`.
+
+    Covers combat conditions, charges, enemy settings, exposure, etc. Filter with `query`
+    (matches the option's key or label), e.g. "boss", "charge", "exposure". Returns each
+    option's `var` (the key for set_config), `type`, `label`, and valid `values` for dropdowns.
+    """
+    return get_engine().list_config_options(query=query, limit=limit)
+
+
+@mcp.tool()
 def equip_item(raw: str, slot: str | None = None) -> dict[str, Any]:
     """Equip an item on the active build from raw Path of Building item text.
 
@@ -124,6 +155,12 @@ def equip_item(raw: str, slot: str | None = None) -> dict[str, Any]:
     (e.g. "Ring 2", "Weapon 2"); otherwise the item's primary slot is used. Returns updated stats.
     """
     return get_engine().add_item(raw, slot=slot)
+
+
+@mcp.tool()
+def unequip_item(slot: str) -> dict[str, Any]:
+    """Clear an equipment slot on the active build (e.g. "Ring 2", "Body Armour", "Weapon 1")."""
+    return get_engine().unequip_item(slot)
 
 
 @mcp.tool()

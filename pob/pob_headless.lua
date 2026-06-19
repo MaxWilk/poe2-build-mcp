@@ -265,6 +265,105 @@ function methods.add_item(p)
 	return { ok = true, slot = slot, stats = collectStats(p.keys) }
 end
 
+-- Clear an equipment slot (e.g. "Ring 2", "Body Armour").
+function methods.unequip_item(p)
+	local slot = p and p.slot
+	local sc = slot and build.itemsTab.slots[slot]
+	if not sc then
+		return { ok = false, error = "unknown slot: " .. tostring(slot) }
+	end
+	sc:SetSelItemId(0)
+	build.buildFlag = true
+	runCallback("OnFrame")
+	return { ok = true, slot = slot, stats = collectStats(p.keys) }
+end
+
+-- Full read-back of the active build (so callers can see what they've assembled).
+function methods.get_build()
+	local spec = build.spec
+	local notables, keystones, asc = {}, {}, {}
+	for _, node in pairs(spec.allocNodes) do
+		if node.ascendancyName then
+			if node.type == "Notable" then
+				table.insert(asc, node.name)
+			end
+		elseif node.type == "Keystone" then
+			table.insert(keystones, node.name)
+		elseif node.type == "Notable" then
+			table.insert(notables, node.name)
+		end
+	end
+	table.sort(notables)
+	table.sort(keystones)
+	table.sort(asc)
+
+	local gems = {}
+	local sg = build.skillsTab.socketGroupList[build.mainSocketGroup or 1]
+	if sg and sg.gemList then
+		for _, g in ipairs(sg.gemList) do
+			local nm = g.nameSpec
+			if (not nm or nm == "") and g.gemData and g.gemData.grantedEffect then
+				nm = g.gemData.grantedEffect.name
+			end
+			if nm and nm ~= "" then
+				table.insert(gems, { name = nm, level = g.level, quality = g.quality })
+			end
+		end
+	end
+
+	local gear = {}
+	for slotName, slot in pairs(build.itemsTab.slots) do
+		local id = slot.selItemId
+		if id and id ~= 0 and build.itemsTab.items[id] then
+			local it = build.itemsTab.items[id]
+			gear[slotName] = { name = it.title, base = it.baseName }
+		end
+	end
+
+	return {
+		class = spec.curClassName,
+		ascendancy = spec.curAscendClassName,
+		level = build.characterLevel,
+		mainSkill = mainSkillName(),
+		mainSkillGroup = gems,
+		notables = notables,
+		keystones = keystones,
+		ascendancyNotables = asc,
+		gear = gear,
+		pointsUsed = spec:CountAllocNodes(),
+		stats = collectStats(),
+	}
+end
+
+-- Enumerate PoB configuration options usable with set_config (filterable).
+function methods.list_config_options(p)
+	p = p or {}
+	local q = tostring(p.query or ""):lower()
+	local limit = p.limit or 60
+	local varList = LoadModule("Modules/ConfigOptions")
+	local out = {}
+	for _, v in ipairs(varList) do
+		if type(v) == "table" and v.var then
+			local label = (v.label or ""):gsub("%^x%x%x%x%x%x%x", ""):gsub("%^%d", "")
+			if q == "" or label:lower():find(q, 1, true) or v.var:lower():find(q, 1, true) then
+				local entry = { var = v.var, type = v.type, label = label }
+				if v.list then
+					local vals = {}
+					for _, o in ipairs(v.list) do
+						table.insert(vals, o.val)
+					end
+					entry.values = vals
+				end
+				table.insert(out, entry)
+				if #out >= limit then
+					break
+				end
+			end
+		end
+	end
+	return { count = #out, options = out }
+end
+
 -- ---------------------------------------------------------------------------
 -- passive tree
 -- ---------------------------------------------------------------------------
