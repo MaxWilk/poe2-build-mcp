@@ -1,0 +1,60 @@
+{
+  "dxt_version": "0.1",
+  "name": "poe2-build-mcp",
+  "display_name": "Path of Exile 2 Build Assistant",
+  "version": "0.1.0",
+  "description": "A queryable Path of Exile 2 game corpus plus Path-of-Building-faithful calculations: import builds, theorycraft, search items/gems/mods/uniques/passives, optimize, and check live prices.",
+  "author": {
+    "name": "hotkeysgamesllc"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "python",
+    "entry_point": "server/main.py",
+    "mcp_config": {
+      "command": "python",
+      "args": ["-m", "server.main"],
+      "env": {
+        "POB_LUAJIT": "${user_config.luajit_path}"
+      }
+    }
+  },
+  "user_config": {
+    "luajit_path": {
+      "type": "string",
+      "title": "LuaJIT executable path",
+      "description": "Absolute path to luajit(.exe). Leave blank to auto-detect on PATH or in a standard MSYS2 location.",
+      "required": false
+    }
+  },
+  "tools": [
+    { "name": "import_build", "description": "Import a build from a PoB code, pobb.in/pastebin link, or XML." },
+    { "name": "get_build_stats", "description": "PoB-computed stats for the active build." },
+    { "name": "set_skill", "description": "Set the active build's main skill." },
+    { "name": "set_config", "description": "Set combat config and/or extra modifiers." },
+    { "name": "equip_item", "description": "Equip an item from raw PoB item text." },
+    { "name": "evaluate_build", "description": "Check the build against numeric goals." },
+    { "name": "compare_to", "description": "A/B the active build against another." },
+    { "name": "search_passives", "description": "Search the passive tree." },
+    { "name": "alloc_passive", "description": "Allocate a passive node (auto-routed)." },
+    { "name": "dealloc_passive", "description": "Deallocate a passive node." },
+    { "name": "optimize_passives", "description": "Greedily allocate points to maximize a stat." },
+    { "name": "search_items", "description": "Search item bases." },
+    { "name": "find_skills", "description": "Find skill/support gems." },
+    { "name": "get_gem", "description": "Get a gem's details." },
+    { "name": "search_mods", "description": "Search affixes by readable text." },
+    { "name": "reverse_lookup", "description": "Find sources of a stat." },
+    { "name": "search_uniques", "description": "Search unique items." },
+    { "name": "get_unique", "description": "Get a unique item's full text." },
+    { "name": "list_ascendancies", "description": "List ascendancies." },
+    { "name": "get_prices", "description": "Live currency/unique prices (poe2scout)." },
+    { "name": "check_data_version", "description": "Corpus freshness vs upstream." },
+    { "name": "update_corpus", "description": "Rebuild/update the bundled corpus." }
+  ],
+  "compatibility": {
+    "platforms": ["win32", "darwin", "linux"],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  }
+}

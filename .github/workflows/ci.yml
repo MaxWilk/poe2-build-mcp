@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LuaJIT
+        run: sudo apt-get update && sudo apt-get install -y luajit
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Check out PoB-PoE2 (pinned)
+        # Pinned ref recorded in pob/PINNED.md. Pin to the exact commit for reproducible CI.
+        run: |
+          git clone --depth 1 --branch dev \
+            https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git \
+            pob/PathOfBuilding-PoE2
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint
+        run: |
+          uv run ruff check server scripts pipeline tests
+          uv run ruff format --check server scripts pipeline tests
+
+      - name: Build corpus
+        run: uv run python -m pipeline.build_corpus
+
+      - name: Run tests (golden engine + corpus)
+        run: uv run pytest

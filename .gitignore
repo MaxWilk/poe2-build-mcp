@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Build artifacts / generated data (corpus is a release asset, not source)
+data/corpus.sqlite
+data/raw/
+*.sqlite-wal
+*.sqlite-shm
+
+# Vendored PoB working copy — tracked via pob/PINNED.md (submodule at CI time), not as files
+pob/PathOfBuilding-PoE2/
+
+# Bundled runtime binaries (assembled at package time)
+runtime/luajit/
+
+# OS
+Thumbs.db
+.DS_Store

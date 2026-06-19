@@ -1,0 +1,30 @@
+[project]
+name = "poe2-build-mcp"
+version = "0.1.0"
+description = "MCP server for Path of Exile 2: queryable game corpus + Path-of-Building-faithful calculations."
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
