@@ -148,6 +148,29 @@ def test_optimize_balanced_raises_offense_and_defense(engine):
     assert r["finalDPS"] > r["startDPS"] and r["finalEHP"] > r["startEHP"]
 
 
+def test_scaffold_gear_caps_resists_gap_driven(engine):
+    from server import scaffold
+
+    engine.new_build()
+    engine.set_class("Monk", "Martial Artist")
+    engine.set_level(90)
+    engine.paste_skill("Tempest Flurry 20/0  1")
+    engine.add_item("Rarity: Rare\nX\nSteelpoint Quarterstaff\n120% increased Physical Damage")
+    before_life = engine.get_defenses()["life"]
+    r = scaffold.scaffold_gear(engine)
+    assert r["ok"] and r["filled"]
+    ra = r["resistsAfter"]
+    assert ra["fire"] >= 75 and ra["cold"] >= 75 and ra["lightning"] >= 75  # capped
+    assert r["lifeAfter"] > before_life  # life pool added (auto)
+    # pool="none" -> resists only, no life/ES
+    engine.new_build()
+    engine.set_class("Witch")
+    r2 = scaffold.scaffold_gear(engine, pool="none")
+    assert all(
+        "Life" not in m and "Energy Shield" not in m for f in r2["filled"] for m in f["mods"]
+    )
+
+
 def test_engine_reports_tree_version(engine):
     # the ready frame surfaces the passive-tree data version (used by engine_health)
     assert engine.info.get("treeVersion")

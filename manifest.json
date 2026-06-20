@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Your AI build companion for Path of Exile 2. Import a build for real Path of Building numbers, theorycraft and optimize upgrades, search items, gems, and uniques, and check live prices — every stat computed by the engine, never guessed.",
   "icon": "assets/icon.png",
   "author": {
@@ -43,7 +43,8 @@
     { "name": "search_passives", "description": "Search the passive tree." },
     { "name": "alloc_passive", "description": "Allocate a passive node (auto-routed)." },
     { "name": "dealloc_passive", "description": "Deallocate a passive node." },
-    { "name": "optimize_passives", "description": "Greedily allocate points to maximize a stat." },
+    { "name": "optimize_passives", "description": "Greedily allocate points to maximize a stat (or 'balanced')." },
+    { "name": "scaffold_gear", "description": "Fill empty defensive slots with placeholder gear to close resist/pool gaps." },
     { "name": "search_items", "description": "Search item bases." },
     { "name": "find_skills", "description": "Find skill/support gems." },
     { "name": "get_gem", "description": "Get a gem's details." },

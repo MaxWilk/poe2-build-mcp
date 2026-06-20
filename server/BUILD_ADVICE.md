@@ -125,6 +125,37 @@ when you need more reservation. Don't leave a big chunk of spirit unspent.
 
 ---
 
+## Design patterns of strong builds
+
+Structural patterns strong builds share — stated as durable design, **not** as any current pick
+(no specific skill/item/ascendancy is "the answer"). Use them to shape a build, then verify on
+the engine.
+
+- **Defense is *completed*, not partial.** Strong builds reach a full defensive baseline before
+  chasing more damage: resistances capped, a real hit pool, every gear slot used. A build with
+  uncapped resists or a few-hundred pool is unfinished, however high its tooltip DPS.
+- **Commit to one damage type and scale it multiplicatively.** Pick a single damage type (often a
+  single ailment too) and stack it rather than splitting across types. Support gems are the
+  *backbone* — most of the damage comes from the multiplicative ("more") supports on the main
+  skill; gear and tree add flat/increased on top.
+- **Crit is all-or-nothing.** If a build goes crit, it commits to *both* crit chance and crit
+  damage (plus a crit support) — half-invested crit is wasted. Builds that don't commit scale
+  hit/ailment damage instead. Pick one lane.
+- **Pick one defensive archetype and let it reshape the build.** Life, energy shield, or a hybrid
+  — the choice changes which stats matter. An ES-only identity (e.g. a keystone that sets life to
+  1 in exchange for chaos immunity) makes life *and* chaos resistance irrelevant; an evasion/ES
+  hybrid wants recharge uptime; an armour/life build wants flat life and big-hit mitigation.
+  Choose, then stop paying for stats your archetype doesn't use.
+- **Use every slot.** Complete builds fill gear *and* jewels, and cover ailments with charms — not
+  just resistances. Empty slots and missing ailment coverage are unfinished work.
+- **Solve "tax" stats on suffixes; spend prefixes on the payoff.** Resistances and attributes are
+  typically suffixes, so prefixes can carry the build's defining stats (life/ES, added damage —
+  the things that scale it).
+
+None of these prescribe *what* to play — they describe what *coherent* looks like. The skill,
+items, and ascendancy are the player's call; these are the structural discipline that turns any
+of those choices into a working build.
+
 ## Common red flags (cheap wins hiding here)
 
 - Uncapped elemental resistance, or negative chaos resistance.

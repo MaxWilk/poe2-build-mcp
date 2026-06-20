@@ -17,6 +17,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from . import paths
+from . import scaffold
 from .compute.engine import PobEngine
 from .compute import solver
 from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, to_xml
@@ -341,6 +342,24 @@ def optimize_passives(
     )
 
 
+@mcp.tool()
+def scaffold_gear(
+    pool: str = "auto", target_resist: int = 75, slots: list[str] | None = None
+) -> dict[str, Any]:
+    """Fill the active build's EMPTY armour/jewellery slots with placeholder BASELINE gear.
+
+    Closes the build's *actual* defensive gaps so a from-scratch skeleton becomes engine-
+    evaluable: it adds only the resistances that are below `target_resist` (default 75 — a build
+    already capping a resist gets none) and a hit pool. `pool` is "auto" (Energy Shield for an
+    ES/CI build, else Life), "life", "energy_shield", or "none". `slots` limits which empty slots
+    to fill (default all). The items are an explicit BASELINE — NOT the player's real gear and NOT
+    optimal; the assistant still chooses the weapon and offense/identity gear (via equip_item).
+    Use this to complete a build's defenses, then re-check with get_defenses / evaluate_build and
+    price the real versions with get_prices — and never present scaffolded gear as finished.
+    """
+    return scaffold.scaffold_gear(get_engine(), pool=pool, target_resist=target_resist, slots=slots)
+
+
 def _server_version() -> str:
     """The installed server (code) version, read from the bundled manifest."""
     try:
@@ -632,7 +651,8 @@ def build_from_goal(goal: str, character_class: str = "") -> str:
         "Follow create → validate → cost → present: set_class → set_level → set_skill (use "
         "find_supports_for for supports) → for an attack skill equip a weapon FIRST (equip_item) "
         "so DPS computes → allocate the tree (optimize_passives, including metric='balanced' to "
-        "raise offense AND defense) → gear EVERY slot for capped resists and a real Life/ES pool.\n\n"
+        "raise offense AND defense) → equip the weapon + offense/identity gear, then scaffold_gear "
+        "to fill the remaining slots to capped resists + a real pool (replace it with real drops).\n\n"
         "A build is NOT done until it clears a real bar (see build_advice('targets')): resists "
         "capped, a full gear set, a meaningful hit pool, DPS that clears the player's content, and "
         "sustain. CONFIRM with get_defenses + evaluate_build against explicit goals; sanity-check "

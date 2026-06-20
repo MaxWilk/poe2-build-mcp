@@ -58,7 +58,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (42 MCP tools)
+### The toolset (43 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -72,6 +72,7 @@ engine confirms the effect.
 - `search_passives(query?, node_type?)` / `get_passive(node)`
 - `alloc_passive(node)` / `dealloc_passive(node)` — allocate/route by id or name, with deltas
 - `optimize_passives(metric, points)` — greedy point allocation (`metric="balanced"` raises DPS+EHP)
+- `scaffold_gear(pool?, target_resist?)` — fill empty defensive slots to close resist/pool gaps (baseline, not optimal)
 - `engine_health()` — engine + install diagnostics (liveness, LuaJIT/tree/data/server versions)
 
 *Corpus / knowledge — bundled SQLite + FTS, no engine needed:*
