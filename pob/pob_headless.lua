@@ -788,8 +788,14 @@ function methods.optimize_passives(p)
 					cands[#cands + 1] = node
 				end
 			end
+			-- Stable total order (pathDist, then id) so the greedy is deterministic — `pairs` order
+			-- is unspecified and otherwise drifts between LuaJIT builds/platforms (local vs CI).
 			table.sort(cands, function(a, b)
-				return (a.pathDist or 1e9) < (b.pathDist or 1e9)
+				local pa, pb = a.pathDist or 1e9, b.pathDist or 1e9
+				if pa ~= pb then
+					return pa < pb
+				end
+				return (a.id or 0) < (b.id or 0)
 			end)
 
 			local best, bestGain, bestCost
