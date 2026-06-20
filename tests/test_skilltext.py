@@ -7,6 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pytest  # noqa: E402
+
+from server.compute import pob_code  # noqa: E402
 from server.compute.skilltext import normalize_skill_text  # noqa: E402
 from server.compute.solver import _apply_template  # noqa: E402
 
@@ -48,3 +51,27 @@ def test_apply_template_multiple_placeholders():
     )
     assert _apply_template("{}% increased Lightning Damage", 10) == "10% increased Lightning Damage"
     assert _apply_template("+{} to maximum Life", 25) == "+25 to maximum Life"
+
+
+def test_import_link_rejects_webpage_hosts():
+    # Build-archive pages aren't raw PoB codes — fail fast with a paste-the-code hint, not a
+    # cryptic base64 error from decoding a web page.
+    for url in (
+        "https://maxroll.gg/poe2/pob/abc",
+        "https://pobarchives.com/build/xyz",
+        "https://poe.ninja/pob/123",
+        "https://mobalytics.gg/poe-2/builds/whatever",
+    ):
+        with pytest.raises(pob_code.PobCodeError) as ei:
+            pob_code.to_xml(url)
+        assert "paste" in str(ei.value).lower()
+
+
+def test_coerce_to_xml_html_vs_xml_vs_code():
+    # An HTML page returns a friendly error; raw PoB XML passes through; a real code decodes.
+    with pytest.raises(pob_code.PobCodeError):
+        pob_code._coerce_to_xml("<!DOCTYPE html><html><head></head></html>", "x")
+    xml = '<?xml version="1.0"?><PathOfBuilding2><Build/></PathOfBuilding2>'
+    assert pob_code._coerce_to_xml(xml, "x") == xml
+    code = pob_code.encode_code('<PathOfBuilding2><Build level="1"/></PathOfBuilding2>')
+    assert "PathOfBuilding2" in pob_code._coerce_to_xml(code, "x")

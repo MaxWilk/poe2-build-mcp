@@ -13,12 +13,25 @@ from __future__ import annotations
 import base64
 import re
 import zlib
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 _WS = re.compile(r"\s+")
 _LINK = re.compile(r"^\s*https?://", re.IGNORECASE)
 _POBB = re.compile(r"^https?://pobb\.in/([A-Za-z0-9_-]+)/?$", re.IGNORECASE)
 _PASTEBIN = re.compile(r"^https?://pastebin\.com/(?:raw/)?([A-Za-z0-9]+)/?$", re.IGNORECASE)
+# Build hosts that render an HTML page rather than serving a raw PoB code at the link URL (several
+# also block bots). We can't reliably scrape these, so we fail fast and tell the user to paste the
+# export code — clearer than a downstream "invalid base64" from decoding a web page.
+_PAGE_HOSTS = re.compile(
+    r"^https?://(?:www\.)?(?:maxroll\.gg|pobarchives\.com|poe\.ninja|poe2\.ninja|mobalytics\.gg|"
+    r"pathofexile\.com)/",
+    re.IGNORECASE,
+)
+_SUPPORTED = (
+    "Direct link import supports pobb.in and pastebin; for any other site, open the build and "
+    "paste its PoB export code (the long text from 'Copy' / Import → Export)."
+)
 
 
 class PobCodeError(ValueError):
@@ -71,14 +84,37 @@ def fetch_code(url: str, timeout: float = 15.0) -> str:
     req = Request(raw_url, headers={"User-Agent": "poe2-build-mcp/0.1"})
     try:
         with urlopen(req, timeout=timeout) as resp:  # noqa: S310 - http(s) only
-            return resp.read().decode("utf-8").strip()
-    except Exception as e:  # noqa: BLE001
-        raise PobCodeError(f"failed to fetch import code from {raw_url}: {e}") from e
+            return resp.read().decode("utf-8", "replace").strip()
+    except HTTPError as e:
+        raise PobCodeError(
+            f"couldn't fetch the build from {raw_url} (HTTP {e.code}) — the link may be private, "
+            f"expired, or unsupported. {_SUPPORTED}"
+        ) from e
+    except (URLError, TimeoutError, OSError) as e:
+        raise PobCodeError(
+            f"couldn't reach {raw_url} ({e}). Check the link, or paste the PoB export code directly."
+        ) from e
+
+
+def _coerce_to_xml(content: str, origin: str) -> str:
+    """Turn fetched link content into build XML — tolerating raw-XML endpoints and flagging the
+    common failure where a link returns an HTML page instead of a code."""
+    c = (content or "").strip()
+    if not c:
+        raise PobCodeError(f"the link {origin} returned no content. {_SUPPORTED}")
+    if "PathOfBuilding" in c and "<" in c[:200]:
+        return c  # endpoint served raw PoB XML directly
+    head = c[:256].lstrip().lower()
+    if head.startswith(("<!doctype", "<html", "<?xml")) or "<head" in head or "<body" in head:
+        raise PobCodeError(f"the link {origin} returned a web page, not a PoB code. {_SUPPORTED}")
+    return decode_code(c)
 
 
 def to_xml(source: str) -> str:
     """Accept a PoB code OR a pobb.in/pastebin link and return build XML."""
     source = (source or "").strip()
     if is_link(source):
-        source = fetch_code(source)
+        if _PAGE_HOSTS.match(source):
+            raise PobCodeError(f"that link is a build webpage, not a raw PoB code. {_SUPPORTED}")
+        return _coerce_to_xml(fetch_code(source), source)
     return decode_code(source)

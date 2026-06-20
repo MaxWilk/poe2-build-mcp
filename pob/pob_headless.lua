@@ -210,6 +210,34 @@ local function engineLimitationNote()
 	return nil
 end
 
+-- DPS-reading guidance. TotalDPS is ONE hit of the main skill. When FullDPS is materially higher,
+-- that's PoB aggregating hits the single figure omits (overlapping projectiles, secondary/ailment,
+-- DoT) — surface it so a multi-hit build (e.g. Spark) isn't under-read ~10x. Falls back to the
+-- no-shotgun caution for plain multi-projectile skills where FullDPS isn't elevated.
+local function dpsNoteFor(out)
+	out = out or {}
+	local total = tonumber(out.TotalDPS) or 0
+	local full = tonumber(out.FullDPS) or 0
+	local proj = tonumber(out.ProjectileCount) or 0
+	if total > 0 and full > total * 1.05 then
+		return "FullDPS ("
+			.. math.floor(full + 0.5)
+			.. ") is PoB's COMBINED number — every skill flagged for Full DPS plus secondary hits/"
+			.. "ailments/damage-over-time — and assumes everything lands, so a single-target boss "
+			.. "figure is usually lower. TotalDPS above is just ONE hit of the main skill. PoE2 has no "
+			.. "shotgunning, so do NOT multiply TotalDPS by projectile count; compare builds "
+			.. "like-for-like (FullDPS vs FullDPS)."
+	elseif proj > 1 and total > 0 then
+		return "This skill fires "
+			.. proj
+			.. " projectiles. TotalDPS is the single-target figure — PoE2 generally does NOT allow "
+			.. "shotgunning, so do NOT multiply it by projectile count for boss DPS. Extra "
+			.. "projectiles add clear/coverage (and can feed ailments/secondary effects). A few "
+			.. "skills do let projectiles overlap on one target — confirm in-game before assuming."
+	end
+	return nil
+end
+
 -- Standard {mainSkill, stats} response, with a warning attached when one applies.
 local function statResult(keys)
 	local r = { mainSkill = mainSkillName(), stats = collectStats(keys) }
@@ -221,18 +249,9 @@ local function statResult(keys)
 	if el then
 		r.engineNote = el
 	end
-	-- Clarify multi-projectile DPS WITHOUT implying shotgunning: PoE2 generally does NOT let
-	-- multiple projectiles from one use stack on a single target, so projectile count is clear/
-	-- coverage (and ailment/secondary feed), not a single-target multiplier.
-	local out = (build.calcsTab and build.calcsTab.mainOutput) or {}
-	local proj = tonumber(out.ProjectileCount) or 0
-	if proj > 1 and (tonumber(out.TotalDPS) or 0) > 0 then
-		r.dpsNote = "This skill fires "
-			.. proj
-			.. " projectiles. TotalDPS is the single-target figure — PoE2 generally does NOT allow "
-			.. "shotgunning, so do NOT multiply it by projectile count for boss DPS. Extra "
-			.. "projectiles add clear/coverage (and can feed ailments/secondary effects). A few "
-			.. "skills do let projectiles overlap on one target — confirm in-game before assuming."
+	local note = dpsNoteFor((build.calcsTab and build.calcsTab.mainOutput) or {})
+	if note then
+		r.dpsNote = note
 	end
 	return r
 end
@@ -413,6 +432,12 @@ function methods.paste_skill(p)
 	if build.skillsTab.controls and build.skillsTab.controls.groupList then
 		build.skillsTab.controls.groupList.selIndex = newIndex
 		build.skillsTab.controls.groupList.selValue = list[newIndex]
+	end
+	-- Compute FullDPS for the main skill (PoB only rolls it up for groups flagged "include in Full
+	-- DPS"; off by default). This makes the realistic multi-hit/overlap number available from scratch
+	-- for projectile skills like Spark, where TotalDPS (one hit) badly under-reads the build.
+	if list[newIndex] then
+		list[newIndex].includeInFullDPS = true
 	end
 	selectMainSocketGroup(newIndex)
 	-- A syntactically valid but unrecognized gem name parses into a group with no real skill (it
@@ -673,6 +698,10 @@ function methods.get_build()
 			.. used
 			.. "). Allocate them (optimize_passives / alloc_passive) or tell the user why "
 			.. "they're parked — an export with unspent points looks incomplete."
+	end
+	local note = dpsNoteFor((build.calcsTab and build.calcsTab.mainOutput) or {})
+	if note then
+		r.dpsNote = note
 	end
 	return r
 end

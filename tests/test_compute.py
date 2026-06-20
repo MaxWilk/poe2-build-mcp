@@ -440,6 +440,16 @@ def test_set_skill_recovers_after_bad_input(engine):
     assert "Controlled Destruction" in names and "Lightning Penetration" in names
 
 
+def test_set_skill_computes_full_dps(engine):
+    # FullDPS is off by default in PoB (only summed for groups flagged "include in Full DPS").
+    # set_skill now flags the main group, so FullDPS is computed — equal to TotalDPS for a single
+    # skill, and the basis for an apples-to-apples comparison against imported multi-skill builds.
+    _spark_caster(engine)
+    s = engine.paste_skill("Spark 20/20  1")["stats"]
+    assert (s.get("FullDPS") or 0) > 0
+    assert s["FullDPS"] == pytest.approx(s["TotalDPS"], rel=1e-2)
+
+
 def test_rank_levers_tolerates_multi_placeholder(fireball):
     # A lever template with TWO "{}" (e.g. "Adds {} to {} ... Damage") must not crash (#rank_levers).
     from server.compute import solver

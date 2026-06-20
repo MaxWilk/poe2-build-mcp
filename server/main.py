@@ -91,12 +91,55 @@ def import_build(source: str) -> dict[str, Any]:
     `source` may be a Path of Building import/share code, a pobb.in or pastebin link, or
     raw PoB XML. Returns the selected main skill and a summary of engine-computed stats.
     The imported build becomes the active build for subsequent tool calls.
+
+    Shared PoBs are often aspirational, so the result carries `importCaveats` when the build has
+    author-added custom mods, an over-budget tree, or uncapped resists — don't read its raw numbers
+    as achieved-as-shown without accounting for those.
     """
     try:
         xml = _source_to_xml(source)
     except (PobCodeError, ValueError) as e:
         return {"ok": False, "error": f"Could not read that build source: {e}"}
-    return get_engine().load_build_xml(xml)
+    eng = get_engine()
+    res = eng.load_build_xml(xml)
+    res["importCaveats"] = _import_caveats(eng)
+    return res
+
+
+def _import_caveats(eng: PobEngine) -> list[str]:
+    """Flag why a shared PoB's raw numbers may overstate reality (best-effort; never raises)."""
+    caveats: list[str] = []
+    try:
+        b = eng.get_build()
+        if (b.get("customMods") or "").strip():
+            caveats.append(
+                "carries author-added custom mods (configTab) that can inflate its stats beyond "
+                "what its gear provides"
+            )
+        used, avail = b.get("pointsUsed") or 0, b.get("pointsAvailable") or 0
+        if used > avail:
+            caveats.append(
+                f"tree spends {used} passive points but level {b.get('level')} grants only {avail} "
+                f"({used - avail} over budget — aspirational, not attainable as shown)"
+            )
+        res = eng.get_defenses().get("resistances") or {}
+        elems = ["fire", "cold", "lightning"]
+        if "Chaos Inoculation" not in (b.get("keystones") or []):
+            elems.append("chaos")
+        under = [
+            f"{el} {res.get(el)}"
+            for el in elems
+            if isinstance(res.get(el), (int, float)) and res[el] < 75
+        ]
+        if under:
+            caveats.append(
+                "resistances below the 75% cap ("
+                + ", ".join(under)
+                + ") — not fully defended as imported"
+            )
+    except Exception:
+        return caveats  # advisory only
+    return caveats
 
 
 @mcp.tool()

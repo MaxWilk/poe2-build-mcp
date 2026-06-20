@@ -65,6 +65,37 @@ def test_equip_item_clean_gear_has_no_warning(monkeypatch):
     assert "illegalAffixes" not in res and "legalityWarning" not in res
 
 
+def test_import_caveats_flag_aspirational_pob():
+    from server import main
+
+    class _Stub:
+        def get_build(self):
+            return {
+                "customMods": "+111% to Fire Resistance",
+                "pointsUsed": 140,
+                "pointsAvailable": 116,
+                "level": 93,
+                "keystones": [],
+            }
+
+        def get_defenses(self):
+            return {"resistances": {"fire": 66, "cold": 66, "lightning": 66, "chaos": 33}}
+
+    joined = " ".join(main._import_caveats(_Stub())).lower()
+    assert "custom mods" in joined
+    assert "over budget" in joined
+    assert "below the 75% cap" in joined and "chaos 33" in joined
+
+    class _CI(_Stub):
+        def get_build(self):
+            d = _Stub.get_build(self)
+            d["keystones"] = ["Chaos Inoculation"]
+            return d
+
+    ci = " ".join(main._import_caveats(_CI())).lower()
+    assert "chaos" not in ci  # chaos resist is irrelevant under Chaos Inoculation
+
+
 def test_meta_builds_shape():
     # Network-free: exercise the league selection + formatting on a sample payload.
     from server.live import meta

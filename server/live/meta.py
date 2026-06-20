@@ -102,7 +102,9 @@ def shape(data: Any, league: str | None = None, limit: int = 15) -> dict[str, An
         "note": (
             "Popularity among logged top-ladder characters — NOT a recommendation. Popular is "
             "not the same as optimal or right for the player's goal. Use it as context only; "
-            "ascendancy distribution only (no skill/item meta). Verify any build with the engine."
+            "this is ascendancy distribution ONLY (no skill/item/build data). For a build-level "
+            "meta comparison, find one (web-search a pobb.in/pastebin link), load it with "
+            "import_build, and compare numbers on the engine. Verify any build with the engine."
         ),
     }
 

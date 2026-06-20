@@ -89,10 +89,14 @@ realize it, then re-check defenses.
 
 - **Fresh characters show deeply negative resists — expected.** PoB applies the endgame resist
   penalty; bring them to the 75% cap via gear/tree. `get_defenses` reports over-cap (a buffer).
-- **`TotalDPS` is single-target, and PoE2 has no shotgunning.** For multi-projectile skills the
-  response carries `ProjectileCount` + a `dpsNote` — do NOT multiply DPS by projectile count for
-  boss damage; extra projectiles are clear/coverage (and ailment feed). A few skills (bouncing
-  projectiles) do overlap on one target — confirm in-game.
+- **`TotalDPS` is ONE hit; read `FullDPS` for multi-hit/projectile skills.** TotalDPS is a single
+  hit of the main skill. `FullDPS` is PoB's all-hits-landing estimate (overlapping projectiles,
+  secondary/ailment, DoT). For a projectile skill that overlaps on a target (e.g. **Spark**,
+  where TotalDPS can be ~1/10th of FullDPS), the realistic boss number is between them, closer to
+  FullDPS — the `dpsNote` says so when they diverge. PoE2 has no shotgunning, so never just multiply
+  TotalDPS by projectile count; for single-projectile skills (Arc, Fireball) TotalDPS *is* the
+  boss number. Comparing two builds? Use the same metric (FullDPS↔FullDPS) — don't pit one skill's
+  TotalDPS against another's FullDPS.
 - **A ~0-DPS result is often *uncomputable*, not a bug — read the `warning`.** Causes: an Attack
   with no weapon (equip Weapon 1), a buff/reservation skill that isn't a hit (e.g. Plague Bearer),
   an undamageable minion, or %-of-life/corpse detonation. Say "validate kill speed in-game," don't
@@ -119,11 +123,20 @@ realize it, then re-check defenses.
   build can't be made crit without a base crit source.
 - **Passive points are level-driven.** `optimize_passives(points<=0)` fills the remaining budget;
   watch `unspentPoints`/`pointsRemaining`/`pointsNote` and `alloc_passive`'s over-budget warning.
+- **Jewels:** `import_build` reads and computes a build's jewels, but there's no from-scratch
+  jewel-socket tool yet — when building from scratch you can't add tree jewels, so a meta build's
+  jewel contribution (often significant for mana/ES stackers) will be missing from yours. Say so.
+- **Imported PoBs are often aspirational.** `import_build` returns `importCaveats` when the build
+  carries author-added custom mods, an over-budget tree, or uncapped resists — factor those in
+  before trusting its raw numbers (a shared "millions" PoB may assume gear/points it doesn't show).
 - **Finding things:** `find_skills` searches gems; `search_items` searches item bases.
 - **Sustain & pricing:** compare `ManaCost` vs Mana+regen/leech (and Spirit); pricing is
   league-specific (`list_price_leagues`).
 - **Meta is context, not a target.** `get_meta_builds` is popularity, not a recommendation — build
-  to the user's goal; cite meta only when asked, as a data point with its sample size.
+  to the user's goal; cite meta only when asked, as a data point with its sample size. It's
+  **ascendancy distribution only** — for a *build-level* meta comparison, web-search a build's
+  `pobb.in`/pastebin link, `import_build` it, and compare on the engine. Direct link import supports
+  pobb.in + pastebin; for maxroll/pobarchives/poe.ninja pages, paste the build's PoB export code.
 
 ## Boundaries
 
