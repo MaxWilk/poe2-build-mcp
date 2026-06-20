@@ -25,9 +25,16 @@ this file first.
    "smart" heuristics to the server that belong in the model's reasoning.
 3. **Knowledge is offline-first and deterministic.** The corpus is a bundled, read-only
    SQLite file. The only network calls at runtime are the live-ops tools (`get_prices`,
-   `get_meta_builds`, `check_data_version`, `update_corpus`).
-4. **Scraping happens only at build time, never at runtime.** poe2db/RePoE ingestion lives
-   in `pipeline/` and runs in CI. The runtime never scrapes; it downloads vetted artifacts.
+   `get_meta_builds`, `check_data_version`, `update_corpus`, and `lookup_mechanic`).
+   `lookup_mechanic` is a deliberate, narrow exception: a single user-triggered, read-only wiki
+   *lookup* for the long tail not in the corpus. It returns a targeted slice (not a dump),
+   degrades to "unavailable", and never alters the corpus — it is *not* bundled redistribution
+   and *not* scraping (see #4). The deterministic corpus remains the default; live lookup is the
+   fallback when the corpus lacks a topic.
+4. **Scraping happens only at build time, never at runtime.** poe2db/RePoE/wiki ingestion lives
+   in `pipeline/` and runs in CI. The runtime never *scrapes* (bulk-fetches to store); it
+   downloads vetted artifacts. The single on-demand `lookup_mechanic` read (#3) is not scraping:
+   it fetches one page for immediate display and stores nothing.
 5. **Generated builds are always verified before being presented.** The norm is
    `create → validate → cost → present`. A build that fails `validate_build` is flagged, not
    recommended.
@@ -41,7 +48,7 @@ this file first.
 ```
 server/knowledge/  → SQLite + FTS queries        (offline, deterministic)
 server/compute/    → PoB RPC client + sessions    (talks to headless LuaJIT)
-server/live/       → prices, meta, version, update (the only runtime network)
+server/live/       → prices, meta, version, update, wiki lookup (the only runtime network)
 pob/               → vendored PoB-PoE2 + pob_headless.lua (JSON-RPC over stdio)
 pipeline/          → offline corpus build (CI only)
 data/corpus.sqlite → bundled prebuilt artifact
@@ -117,7 +124,15 @@ uv run python pob/spike.py                  # M0 headless spike harness
 
 - Game data is GGG's IP; we redistribute *derived* data within established community-tool
   norms. Credit RePoE-fork and poe2db. Don't overclaim ownership or relicense game data.
-- Scrape politely: cache, rate-limit, identify the tool, respect the source. Pipeline only.
+- **Wiki mechanics are CC BY-NC-SA 3.0** (PoE2 Wiki / poe2wiki.net). They live in their own
+  `mechanics` table, each row stamped with `source` + `license` + `url`, and tool output carries
+  attribution. Keep this tier **segregated** from our own (Tier-1) prose so it stays a clearly-
+  attributed aggregation, not a derivative of our code. **NonCommercial**: this is a free,
+  non-commercial tool — if that ever changes, the wiki tier must be dropped (it's designed to be
+  removable without breaking Tier-1 or the engine). Never let a wiki *number* override an engine
+  number; the wiki informs *how mechanics work*, not magnitudes.
+- Scrape politely: cache, rate-limit, identify the tool, respect the source. Pipeline only
+  (plus the single on-demand `lookup_mechanic` read, which stores nothing).
 - Treat pasted PoB codes as **user data**: don't log them, don't transmit them anywhere
   except the local engine. Live-ops calls send only what they must (e.g. a league + item
   name for pricing), never the user's whole build.

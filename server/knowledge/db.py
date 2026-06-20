@@ -352,3 +352,72 @@ def get_unique(name: str) -> dict | None:
         "item_type": row["item_type"],
         "text": row["text"],
     }
+
+
+def _has_mechanics() -> bool:
+    """Mechanics table exists only in schema_version >= 4 corpora (graceful on older data)."""
+    con = _conn()
+    row = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='mechanics' LIMIT 1"
+    ).fetchone()
+    return row is not None
+
+
+def search_mechanics(query: str, limit: int = 8) -> list[dict]:
+    """Full-text search the wiki-sourced mechanics tier. Returns titles + a snippet + source."""
+    if not query or not _has_mechanics():
+        return []
+    con = _conn()
+    rows = con.execute(
+        "SELECT m.id, m.title, m.url, m.license, m.source, "
+        "snippet(mechanics_fts, 2, '', '', ' … ', 12) AS snip "
+        "FROM mechanics_fts f JOIN mechanics m ON m.id = f.mech_id "
+        "WHERE mechanics_fts MATCH ? ORDER BY rank LIMIT ?",
+        (_match_cols(query, ("title", "text")), limit),
+    ).fetchall()
+    return [
+        {
+            "id": r["id"],
+            "title": r["title"],
+            "snippet": r["snip"],
+            "url": r["url"],
+            "license": r["license"],
+            "source": r["source"],
+        }
+        for r in rows
+    ]
+
+
+def get_mechanic(title_or_id: str, fuzzy: bool = True) -> dict | None:
+    """Return one mechanics page (full text + attribution) by id, exact title, or best FTS hit.
+
+    fuzzy=False restricts to an exact id/title match (no FTS fallback).
+    """
+    if not title_or_id or not _has_mechanics():
+        return None
+    con = _conn()
+    row = con.execute(
+        "SELECT id, title, text, url, license, source FROM mechanics "
+        "WHERE id = ? OR lower(title) = lower(?) LIMIT 1",
+        (title_or_id, title_or_id),
+    ).fetchone()
+    if not row:
+        if not fuzzy:
+            return None
+        hits = search_mechanics(title_or_id, limit=1)
+        if not hits:
+            return None
+        row = con.execute(
+            "SELECT id, title, text, url, license, source FROM mechanics WHERE id = ? LIMIT 1",
+            (hits[0]["id"],),
+        ).fetchone()
+        if not row:
+            return None
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "text": row["text"],
+        "url": row["url"],
+        "license": row["license"],
+        "source": row["source"],
+    }

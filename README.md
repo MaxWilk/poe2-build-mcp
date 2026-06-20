@@ -58,7 +58,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (44 MCP tools)
+### The toolset (47 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -80,7 +80,9 @@ engine confirms the effect.
 - `search_items(query, item_class?)` / `get_item(name_or_id)`
 - `find_skills(query?, gem_type?, tag?, color?)` / `get_gem(name_or_id)` / `find_supports_for(skill)`
 - `build_advice(topic?)` — evergreen build-optimization principles
-- `explain_mechanic(topic)` — concise mechanics references (resistances, ailments, spirit, EHP, …)
+- `explain_mechanic(topic)` — our principle + the matching auto-refreshed wiki page (attributed)
+- `search_mechanics(query)` — full-text search the bundled wiki mechanics tier
+- `relevant_mechanics()` — mechanics worth reading for the *active* build + the engine damage diagnostic
 - `search_mods(query, item_tag?, mod_type?)` / `reverse_lookup(stat)`
 - `search_uniques(query, item_type?)` / `get_unique(name)`
 - `parse_item(text)` — parse an item's text → affix tiers (T1=best) + open prefix/suffix slots
@@ -89,6 +91,7 @@ engine confirms the effect.
 *Live ops & self-update — network:*
 - `get_prices(query, kind, league?)` — poe2scout currency/unique prices · `list_price_leagues()`
 - `get_meta_builds(league?)` — live ascendancy popularity (poe.ninja; context, not a recommendation)
+- `lookup_mechanic(topic)` — fetch a mechanic/skill/item live from the PoE2 Wiki (long-tail fallback)
 - `check_for_updates()` / `apply_updates()` — pull validated engine + corpus releases
 - `check_data_version()` / `update_corpus(rebuild_from_source?)`
 
@@ -104,7 +107,10 @@ Two layers behind one Python server:
   fork run headless under LuaJIT as a persistent JSON-RPC subprocess (loads game data once,
   answers many calls cheaply). PoB is pinned to a release tag and bumped deliberately behind
   golden-build tests.
-- **Knowledge** — a bundled, read-only SQLite/FTS corpus built offline from RePoE/poe2db.
+- **Knowledge** — a bundled, read-only SQLite/FTS corpus built offline from RePoE/poe2db, plus a
+  wiki-sourced **mechanics** tier (PoE2 Wiki). Both refresh **without a new install**: the server
+  pulls validated corpus + engine on startup, and a scheduled CI job rebuilds the corpus from
+  upstream when it actually changes — so game data and mechanics stay current automatically.
 
 Knowledge code never imports compute code; cross-layer orchestration lives in `server/main.py`.
 See [PLAN.md](PLAN.md) for the full design and [CLAUDE.md](CLAUDE.md) for engineering conventions.
@@ -154,4 +160,7 @@ To run from source in Claude Desktop, add to `claude_desktop_config.json`:
 Game data is GGG's IP, redistributed as *derived* data within established community-tool norms —
 with credit to the [RePoE fork](https://repoe-fork.github.io/poe2/) and poe2db. Build numbers come
 from the [PathOfBuilding-PoE2](https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2)
-community fork. This project is not affiliated with or endorsed by Grinding Gear Games.
+community fork. Mechanics pages are sourced from the [PoE2 Wiki](https://www.poe2wiki.net/),
+licensed **CC BY-NC-SA 3.0**; they're kept in a separate, attributed corpus tier (each entry
+carries its source link + license). This is a free, non-commercial tool, and is not affiliated
+with or endorsed by Grinding Gear Games.

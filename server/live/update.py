@@ -50,14 +50,19 @@ def _bundle_version() -> str:
     return f.read_text().strip() if f.exists() else "0"
 
 
-def installed_version() -> str:
+def installed_meta() -> dict:
     f = paths.user_data_dir() / "installed.json"
     if f.exists():
         try:
-            return json.loads(f.read_text()).get("version") or _bundle_version()
+            return json.loads(f.read_text())
         except Exception:  # noqa: BLE001
-            return _bundle_version()
-    return _bundle_version()
+            return {}
+    return {}
+
+
+def installed_version() -> str:
+    """The installed DATA version (corpus/engine payload), falling back to the bundle stamp."""
+    return installed_meta().get("version") or _bundle_version()
 
 
 def _fetch_manifest() -> dict | None:
@@ -78,13 +83,20 @@ def check_for_updates() -> dict[str, Any]:
             "reason": "no release manifest reachable (no published release yet?)",
         }
     latest = str(manifest.get("version", "0"))
+    # app_version is the .mcpb/code version, decoupled from the data version so a data-only
+    # refresh (same app_version, bumped version) doesn't masquerade as a new bundle to install.
+    app_latest = str(manifest.get("app_version") or latest)
+    app_current = _bundle_version()
     return {
+        # data (corpus/engine) update — applies automatically via apply_updates/auto_update
         "available": _vkey(latest) > _vkey(current),
         "current_version": current,
         "latest_version": latest,
+        # new tools/code need a fresh .mcpb (no auto-installer); only true on real app releases
+        "mcpb_update_available": _vkey(app_latest) > _vkey(app_current),
+        "app_version_installed": app_current,
+        "app_version_latest": app_latest,
         "pob_commit": manifest.get("pob_commit"),
-        # Data (corpus + engine) updates apply automatically via apply_updates; grab a new
-        # .mcpb here only for new tools/code changes.
         "download_page": RELEASES_PAGE,
     }
 
@@ -116,10 +128,14 @@ def apply_updates(force: bool = False) -> dict[str, Any]:
         tmp.write_bytes(blob)
         os.replace(tmp, data_dir / "corpus.sqlite")
 
+    prev = installed_meta()
     engine = manifest.get("engine") or {}
-    if engine.get("url"):
+    engine_sha = engine.get("sha256")
+    # Skip the engine download on data-only refreshes — its sha is unchanged from what's installed
+    # (the engine only moves on a real PoB bump / app release), so there's nothing new to fetch.
+    if engine.get("url") and (force or engine_sha != prev.get("engine_sha256")):
         blob = _http(engine["url"])
-        if not _verify(blob, engine.get("sha256")):
+        if not _verify(blob, engine_sha):
             return {"updated": False, "error": "engine checksum mismatch"}
         with tempfile.TemporaryDirectory() as td:
             zpath = Path(td) / "engine.zip"
@@ -135,7 +151,14 @@ def apply_updates(force: bool = False) -> dict[str, Any]:
                 shutil.move(str(src_pob), str(dst_pob))
 
     (data_dir / "installed.json").write_text(
-        json.dumps({"version": latest, "pob_commit": manifest.get("pob_commit")})
+        json.dumps(
+            {
+                "version": latest,
+                "app_version": manifest.get("app_version") or latest,
+                "pob_commit": manifest.get("pob_commit"),
+                "engine_sha256": engine_sha or prev.get("engine_sha256"),
+            }
+        )
     )
     return {"updated": True, "version": latest}
 

@@ -26,15 +26,19 @@ whole point of the connector. The `start_build_session` prompt is a one-click wa
 - **Looked-up (corpus, offline & deterministic):** `search_items`/`get_item`,
   `find_skills`/`get_gem`/`find_supports_for`, `search_mods`/`reverse_lookup`,
   `search_uniques`/`get_unique`, `parse_item` (item text → affix tiers + open slots),
-  `list_ascendancies`, `explain_mechanic`, `build_advice`, `corpus_info`. These are static game
-  facts, **not** statements about the user's build's
-  numbers. Use them to *find* options; use the engine to *value* them. `build_advice` gives
-  durable optimization principles (what to change and why); `explain_mechanic` explains a
-  specific mechanic — both evergreen, with the engine still computing the actual numbers.
+  `list_ascendancies`, `explain_mechanic`, `search_mechanics`, `relevant_mechanics`,
+  `build_advice`, `corpus_info`. These are static game facts, **not** statements about the
+  user's build's numbers. Use them to *find* options; use the engine to *value* them.
+  `build_advice` gives durable optimization principles (what to change and why);
+  `explain_mechanic`/`search_mechanics` explain a mechanic from a bundled, auto-refreshed wiki
+  tier (sourced from the PoE2 Wiki, **CC BY-NC-SA 3.0** — cite the `attribution` it returns when
+  you quote it); `relevant_mechanics` reads the *active build* and points you at the mechanics
+  that matter for it. The engine still computes the actual numbers.
 - **Live (network, may be unavailable):** `get_prices`, `list_price_leagues`, `get_meta_builds`
-  (ascendancy popularity), `check_data_version`, `check_for_updates`/`apply_updates`,
-  `update_corpus` (power-user local rebuild). Treat these as approximate and time-sensitive; if
-  a live call returns "unavailable," carry on and say so.
+  (ascendancy popularity), `lookup_mechanic` (live PoE2 Wiki fetch — the long-tail fallback when
+  a topic isn't in the corpus; attribute it, treat as time-sensitive), `check_data_version`,
+  `check_for_updates`/`apply_updates`, `update_corpus` (power-user local rebuild). Treat these as
+  approximate and time-sensitive; if a live call returns "unavailable," carry on and say so.
 
 When you give an answer, make clear which bucket it came from (e.g. "PoB computes 1.2M DPS"
 vs. "the corpus lists this unique as…" vs. "current Trade price is roughly…").
@@ -55,9 +59,10 @@ All compute tools operate on a single in-memory build that persists across calls
 ## Canonical workflows
 
 **Analyze a user's build:** `import_build(code/link/xml)` → `get_build` + `get_defenses` +
-`get_build_stats` to see where it stands → use the corpus to find candidate improvements →
-**validate every proposed change on the engine** (mutate, re-read stats, or `compare_to`)
-before recommending it.
+`get_build_stats` to see where it stands → `relevant_mechanics` to read up on what actually
+drives *this* build (and catch any uncomputable damage layer up front) → use the corpus to find
+candidate improvements → **validate every proposed change on the engine** (mutate, re-read stats,
+or `compare_to`) before recommending it.
 
 **Build from a goal (create → validate → cost → present):**
 `set_class` → `set_level` → `set_skill` (use `find_supports_for` to pick supports) →
@@ -120,9 +125,17 @@ and defense together instead of glass-cannoning a single stat.
   just equip the new item.
 - **Stat keys are PoB-internal** (`TotalDPS`, `EnergyShield`, `Life`, `TotalEHP`, `Speed`, …).
   Pass them to `get_build_stats`/`get_defenses` when you need specific values.
-- **Attack skills need a weapon.** Equip a weapon (Weapon 1) *before* judging an attack build's
-  DPS — without one it computes ~0 DPS. `set_skill`/`get_build_stats` return a `warning` when the
-  main skill is an Attack and no weapon is equipped; don't mistake that 0 for a bug.
+- **A ~0-DPS result is often *uncomputable*, not a bug — read the `warning`.** `set_skill`/
+  `get_build_stats` attach a `warning` when DPS is ~0 for a knowable reason: an Attack with no
+  weapon (equip Weapon 1 first), a **buff/reservation** skill that isn't a hit (e.g. Plague
+  Bearer — measure what it empowers), an **undamageable minion** (e.g. the ravens), or
+  **%-of-life / corpse detonation** (only the flat part computes). When you see it, say the kill
+  speed must be validated in-game rather than reporting the 0 as the build's damage.
+- **Watch unspent passive points.** `get_build` returns `unspentPoints` (and a `pointsNote` when
+  many are parked); `optimize_passives` returns `pointsRemaining` + a note when greedy can't place
+  more. An export with lots of unspent points reads as "missing campaign/tree points" — spend
+  them (try `optimize_passives("balanced")`, a different `node_type`, or `alloc_passive`) or tell
+  the user why they're parked.
 - **Finding things:** `find_skills` searches *gems*; `search_items` searches *item bases*. Use
   `search_items` (not `find_skills`) for a weapon/armour base.
 - **`find_supports_for` "recommended" is not DPS-ranked.** Its list comes from the corpus and

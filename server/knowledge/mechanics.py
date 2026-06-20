@@ -6,6 +6,8 @@ tooltips and PoB's Calcs breakdown remain authoritative for exact interactions.
 
 from __future__ import annotations
 
+from . import db
+
 MECHANICS: dict[str, str] = {
     "resistances": (
         "Elemental resistances (fire/cold/lightning) reduce elemental damage taken; the cap is "
@@ -62,15 +64,103 @@ MECHANICS: dict[str, str] = {
 _NOTE = "Concise reference — verify exact interactions in-game or via PoB's Calcs breakdown."
 
 
-def explain(topic: str) -> dict:
-    t = (topic or "").strip().lower().replace(" ", "_").replace("-", "_")
-    if t in MECHANICS:
-        return {"topic": t, "text": MECHANICS[t], "note": _NOTE}
+def _curated(norm: str) -> tuple[str, str] | None:
+    """Match a normalized topic to a Tier-1 evergreen note (exact, then substring)."""
+    if norm in MECHANICS:
+        return norm, MECHANICS[norm]
     for key in MECHANICS:
-        if t and (t in key or key in t):
-            return {"topic": key, "text": MECHANICS[key], "note": _NOTE}
-    return {"topic": topic, "found": False, "available_topics": sorted(MECHANICS)}
+        if norm and (norm in key or key in norm):
+            return key, MECHANICS[key]
+    return None
+
+
+def explain(topic: str) -> dict:
+    """Explain a mechanic. Combines our evergreen 'principle' (Tier 1, hand-authored) with the
+    auto-refreshed, attributed wiki page (Tier 2) when one matches."""
+    raw = (topic or "").strip()
+    norm = raw.lower().replace(" ", "_").replace("-", "_")
+    curated = _curated(norm)
+
+    wiki = None
+    hits = db.search_mechanics(raw, limit=1) if raw else []
+    if hits:
+        wiki = db.get_mechanic(hits[0]["id"], fuzzy=False)
+
+    if not curated and not wiki:
+        return {
+            "topic": raw,
+            "found": False,
+            "available_topics": sorted(MECHANICS),
+            "hint": (
+                "No bundled entry. Try search_mechanics(query) for related pages, or "
+                "lookup_mechanic(topic) to fetch it live from the wiki."
+            ),
+        }
+
+    label = curated[0] if curated else wiki["title"]  # type: ignore[index]  # one is non-None here
+    out: dict = {"topic": label, "found": True, "note": _NOTE}
+    if curated:
+        out["principle"] = curated[1]
+    if wiki:
+        out["wiki"] = {k: wiki[k] for k in ("title", "text", "url", "license", "source")}
+        out["attribution"] = f"{wiki['source']}, {wiki['license']} — {wiki['url']}"
+    return out
 
 
 def topics() -> list[str]:
     return sorted(MECHANICS)
+
+
+# Damage-type tag -> the ailment it builds, so a build's element points at the right page.
+_TAG_AILMENT = {
+    "fire": "ignite",
+    "cold": "freeze",
+    "lightning": "shock",
+    "chaos": "poison",
+    "physical": "bleeding",
+}
+# Always-relevant staples worth surfacing for any build.
+_STAPLES = ["resistance", "ailment"]
+# Tags that aren't mechanics (attributes, gem bookkeeping) — skip to cut noise.
+_SKIP_TAGS = {"strength", "dexterity", "intelligence", "gem", "grants_active_skill", "skill"}
+
+
+def relevant(
+    skill: str | None = None,
+    tags: list[str] | None = None,
+    keystones: list[str] | None = None,
+    ascendancy: list[str] | None = None,
+    limit: int = 8,
+) -> list[dict]:
+    """Map an active build's signals to the mechanics pages worth reading for it.
+
+    Each signal (skill tags, the element's ailment, keystones, ascendancy notables, plus a couple
+    of staples) is resolved to its best-matching corpus mechanics page, deduped, with a `why`.
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    def add(term: str, why: str) -> None:
+        if not term or len(out) >= limit:
+            return
+        hits = db.search_mechanics(term, limit=1)
+        if not hits or hits[0]["id"] in seen:
+            return
+        h = hits[0]
+        seen.add(h["id"])
+        out.append({"topic": term, "title": h["title"], "url": h["url"], "why": why})
+
+    for t in tags or []:
+        tl = t.lower()
+        if tl in _SKIP_TAGS:
+            continue
+        if tl in _TAG_AILMENT:
+            add(_TAG_AILMENT[tl], f"{skill or 'skill'} is {tl} → its ailment")
+        add(tl, f"{skill or 'skill'} tag: {tl}")
+    for k in keystones or []:
+        add(k, f"keystone: {k}")
+    for a in ascendancy or []:
+        add(a, f"ascendancy: {a}")
+    for s in _STAPLES:
+        add(s, "universal staple")
+    return out[:limit]

@@ -93,6 +93,37 @@ def test_solve_for_reaches_target(fireball):
     assert fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
 
 
+def test_damage_diagnostic_flags_buff_skill(engine):
+    # A reservation/buff skill computes ~0 DPS by design; the diagnostic must say so (not silence).
+    engine.new_build()
+    engine.set_class("Witch", "Infernalist")
+    engine.set_level(90)
+    engine.paste_skill("Plague Bearer 20/20  1")
+    r = engine.get_stats(["TotalDPS"])
+    assert (r["stats"].get("TotalDPS") or 0) == 0
+    assert r.get("warning") and "buff/reservation" in r["warning"]
+
+
+def test_damage_diagnostic_silent_when_computable(engine):
+    engine.new_build()
+    engine.set_class("Witch", "Infernalist")
+    engine.set_level(90)
+    engine.paste_skill("Fireball 20/20  1")
+    r = engine.get_stats(["TotalDPS"])
+    assert (r["stats"].get("TotalDPS") or 0) > 0
+    assert not r.get("warning")  # a computable build gets no false positive
+
+
+def test_get_build_surfaces_unspent_points(engine):
+    engine.new_build()
+    engine.set_class("Witch", "Infernalist")
+    engine.set_level(90)
+    b = engine.get_build()
+    assert b["pointsAvailable"] == 113  # 89 (level-1) + 24 campaign quest points
+    assert b["unspentPoints"] == b["pointsAvailable"] - b["pointsUsed"]
+    assert "pointsNote" in b  # a fresh tree flags its many unspent points
+
+
 def test_rank_levers_marginal_gain(fireball):
     from server.compute import solver
 

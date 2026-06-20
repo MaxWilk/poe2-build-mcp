@@ -17,6 +17,8 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import wiki
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = REPO_ROOT / "data" / "raw"
 DB_PATH = REPO_ROOT / "data" / "corpus.sqlite"
@@ -53,6 +55,12 @@ CREATE VIRTUAL TABLE mods_fts USING fts5(mod_id UNINDEXED, name, text, tags, sta
 CREATE TABLE uniques(
     id TEXT PRIMARY KEY, name TEXT, base TEXT, item_type TEXT, text TEXT, raw TEXT);
 CREATE VIRTUAL TABLE uniques_fts USING fts5(unique_id UNINDEXED, name, base, text);
+
+-- Wiki-sourced mechanics (CC BY-NC-SA 3.0; attributed via url/license/source columns). This is
+-- the auto-refreshable "how mechanics work" tier, kept segregated from our own prose.
+CREATE TABLE mechanics(
+    id TEXT PRIMARY KEY, title TEXT, text TEXT, url TEXT, license TEXT, source TEXT);
+CREATE VIRTUAL TABLE mechanics_fts USING fts5(mech_id UNINDEXED, title, text);
 
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 """
@@ -120,6 +128,8 @@ def fetch_all(refresh: bool = False) -> None:
         req = urllib.request.Request(BASE + name, headers={"User-Agent": "poe2-build-mcp/0.1"})
         with urllib.request.urlopen(req, timeout=120) as r:
             dest.write_bytes(r.read())
+    print("fetching wiki mechanics ...")
+    print("  wiki:", wiki.fetch_all(refresh=refresh))
 
 
 def _load(name: str) -> dict:
@@ -292,16 +302,29 @@ def build() -> dict[str, int]:
         )
         n_uniques += 1
 
+    n_mech = 0
+    for m in wiki.load_pages():
+        cur.execute(
+            "INSERT INTO mechanics(id,title,text,url,license,source) VALUES(?,?,?,?,?,?)",
+            (m["id"], m["title"], m["text"], m["url"], m["license"], m["source"]),
+        )
+        cur.execute(
+            "INSERT INTO mechanics_fts(mech_id,title,text) VALUES(?,?,?)",
+            (m["id"], m["title"], m["text"]),
+        )
+        n_mech += 1
+
     counts = {
         "items": n_items,
         "gems": n_gems,
         "ascendancies": n_asc,
         "mods": n_mods,
         "uniques": n_uniques,
+        "mechanics": n_mech,
     }
     for key, value in {
         "source": BASE,
-        "schema_version": "3",
+        "schema_version": "4",
         "counts": json.dumps(counts),
         "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }.items():

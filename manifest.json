@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Your AI build companion for Path of Exile 2. Import a build for real Path of Building numbers, theorycraft and optimize upgrades, search items, gems, and uniques, and check live prices — every stat computed by the engine, never guessed.",
   "icon": "assets/icon.png",
   "author": {
@@ -62,6 +62,7 @@
     { "name": "get_prices", "description": "Live currency/unique prices (poe2scout)." },
     { "name": "list_price_leagues", "description": "List PoE2 leagues available for pricing." },
     { "name": "get_meta_builds", "description": "Live ascendancy popularity from poe.ninja (context, not a recommendation)." },
+    { "name": "lookup_mechanic", "description": "Fetch a mechanic/skill/item explanation live from the PoE2 Wiki (long-tail fallback)." },
     { "name": "check_data_version", "description": "Corpus freshness vs upstream." },
     { "name": "update_corpus", "description": "Rebuild the corpus from RePoE locally." },
     { "name": "check_for_updates", "description": "Check for a newer validated release." },
@@ -72,7 +73,9 @@
     { "name": "unequip_item", "description": "Clear an equipment slot." },
     { "name": "list_config_options", "description": "List set_config keys and values." },
     { "name": "find_supports_for", "description": "Find supports for a skill." },
-    { "name": "explain_mechanic", "description": "Concise PoE2 mechanics reference." },
+    { "name": "explain_mechanic", "description": "Mechanic reference: our principle + attributed wiki page (CC BY-NC-SA)." },
+    { "name": "search_mechanics", "description": "Full-text search the bundled wiki mechanics tier." },
+    { "name": "relevant_mechanics", "description": "Mechanics worth reading for the active build + the engine damage diagnostic." },
     { "name": "build_advice", "description": "Evergreen PoE2 build-optimization principles (durable rules)." }
   ],
   "prompts_generated": true,

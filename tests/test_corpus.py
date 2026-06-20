@@ -19,6 +19,7 @@ def test_counts():
     assert counts["gems"] > 1000
     assert counts["mods"] > 5000
     assert counts["uniques"] > 300
+    assert counts["mechanics"] > 20  # wiki mechanics tier (schema_version 4)
 
 
 def test_get_gem_fireball():
@@ -58,7 +59,7 @@ def test_find_supports_for():
 
 
 def test_explain_mechanic():
-    assert "75%" in mechanics.explain("resistances")["text"]
+    assert "75%" in mechanics.explain("resistances")["principle"]  # Tier-1 evergreen note
     assert mechanics.explain("Spirit")["topic"] == "spirit"  # case/fuzzy
     assert mechanics.explain("nonsense").get("found") is False
 
@@ -125,6 +126,40 @@ def test_parse_item_recognizes_energy_shield():
     by = {a["text"]: a for a in r["affixes"]}
     assert by["+90 to maximum Energy Shield"]["type"] == "prefix"
     assert r["prefixes"] == 1  # ES counts as a real prefix, not unrecognized
+
+
+def test_mechanics_tier_search_and_explain():
+    from server.knowledge import mechanics
+
+    # the wiki tier is bundled (schema_version >= 4)
+    hits = db.search_mechanics("energy shield recharge", limit=3)
+    assert hits and any("Energy" in h["title"] for h in hits)
+    assert all(h["license"] == "CC BY-NC-SA 3.0" and h["url"] for h in hits)  # attributed
+
+    # explain combines our evergreen principle (Tier 1) with the attributed wiki page (Tier 2)
+    r = mechanics.explain("energy shield")
+    assert r["found"] and "principle" in r and "wiki" in r
+    assert "CC BY-NC-SA" in r["attribution"]
+
+    # a curated-only topic returns the principle without a bogus wiki match
+    r2 = mechanics.explain("ehp")
+    assert r2["found"] and "principle" in r2 and "wiki" not in r2
+
+    # unknown topic points at search/lookup
+    r3 = mechanics.explain("zzz-not-a-real-topic")
+    assert r3["found"] is False and "lookup_mechanic" in r3["hint"]
+
+
+def test_relevant_mechanics_maps_build_signals():
+    from server.knowledge import mechanics
+
+    rel = mechanics.relevant(skill="Spark", tags=["lightning", "spell", "projectile"])
+    titles = {r["title"] for r in rel}
+    assert "Shock" in titles  # lightning -> its ailment
+    assert any(r["topic"] == "resistance" for r in rel)  # universal staple
+    # attribute tags are filtered out as non-mechanics
+    rel2 = mechanics.relevant(skill="X", tags=["intelligence", "strength"])
+    assert all(r["topic"] not in ("intelligence", "strength") for r in rel2)
 
 
 def test_search_mods_precision():

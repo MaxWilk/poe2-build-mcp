@@ -118,10 +118,79 @@ local function attackWeaponWarning()
 		.. "you equip a weapon (equip_item)."
 end
 
+local function mainActiveSkill()
+	local sg = build.skillsTab.socketGroupList[build.mainSocketGroup or 1]
+	if sg and sg.displaySkillList and sg.mainActiveSkill then
+		return sg.displaySkillList[sg.mainActiveSkill]
+	end
+	return nil
+end
+
+-- True if the active skill's grantedEffect carries a given SkillType (by name, resilient to enum
+-- number changes; degrades to false if the enum/type is absent so we never false-positive).
+local function hasType(ge, name)
+	if not (ge and ge.skillTypes and type(SkillType) == "table" and SkillType[name]) then
+		return false
+	end
+	return ge.skillTypes[SkillType[name]] and true or false
+end
+
+-- Diagnose a ~0-DPS result so an uncomputable pattern isn't mistaken for a bug (or a real build).
+-- Returns the most specific applicable note, or nil. Drives off the skill's SkillTypes + the
+-- actual output, not a hardcoded skill list, so it stays correct as PoB changes. Fires only when
+-- DPS is ~0 (a weak-but-computable build still returns its real number).
+local function damageDiagnostic()
+	local w = attackWeaponWarning() -- most specific: attack with no weapon
+	if w then
+		return w
+	end
+	local act = mainActiveSkill()
+	local ge = act and act.activeEffect and act.activeEffect.grantedEffect
+	if not ge then
+		return nil
+	end
+	local out = (build.calcsTab and build.calcsTab.mainOutput) or {}
+	local dps = tonumber(out.TotalDPS) or tonumber(out.CombinedDPS) or 0
+	if dps > 0 then
+		return nil
+	end
+	local isDamage = hasType(ge, "Damage") or hasType(ge, "DamageOverTime")
+	-- explicitly undamageable minions (e.g. the ravens) — engine can't credit player-facing DPS
+	if hasType(ge, "MinionsAreUndamagable") then
+		return "Main skill summons undamageable minions — the engine can't compute their "
+			.. "player-facing DPS. Validate kill speed in-game."
+	end
+	-- buff/reservation/aura/herald that isn't itself a damage skill: ~0 DPS by design
+	if
+		not isDamage
+		and (
+			hasType(ge, "Buff")
+			or hasType(ge, "HasReservation")
+			or hasType(ge, "Aura")
+			or hasType(ge, "Herald")
+		)
+	then
+		return "Main skill is a buff/reservation effect, not a direct hit — the engine reports "
+			.. "~0 DPS by design. Its impact comes from what it empowers; validate in-game."
+	end
+	-- minion skill with no computed DPS
+	if hasType(ge, "Minion") then
+		return "Main skill is a minion skill but the engine computes ~0 player-facing DPS "
+			.. "(common for undamageable/utility minions). Validate kill speed in-game."
+	end
+	-- generic: a damaging skill that still computes ~0 is usually an uncomputable pattern
+	if isDamage or hasType(ge, "Attack") or hasType(ge, "Spell") then
+		return "Main skill computes ~0 DPS. If it's a reservation buff, an undamageable minion, "
+			.. "or %-of-life / corpse detonation, that layer isn't engine-modelled — validate "
+			.. "in-game rather than trusting the 0."
+	end
+	return nil
+end
+
 -- Standard {mainSkill, stats} response, with a warning attached when one applies.
 local function statResult(keys)
 	local r = { mainSkill = mainSkillName(), stats = collectStats(keys) }
-	local w = attackWeaponWarning()
+	local w = damageDiagnostic()
 	if w then
 		r.warning = w
 	end
@@ -382,7 +451,10 @@ function methods.get_build()
 		end
 	end
 
-	return {
+	local used = spec:CountAllocNodes()
+	local avail = availablePoints()
+	local unspent = math.max(0, avail - used)
+	local r = {
 		class = spec.curClassName,
 		ascendancy = spec.curAscendClassName,
 		level = build.characterLevel,
@@ -393,10 +465,23 @@ function methods.get_build()
 		ascendancyNotables = asc,
 		gear = gear,
 		customMods = (build.configTab and build.configTab.input.customMods) or "",
-		pointsUsed = spec:CountAllocNodes(),
-		pointsAvailable = availablePoints(),
+		pointsUsed = used,
+		pointsAvailable = avail,
+		unspentPoints = unspent,
 		stats = collectStats(),
 	}
+	-- An export with many unspent points reads to users as "missing" tree/campaign points; flag
+	-- it so the assistant spends them (or explains why they're parked).
+	if unspent > 3 then
+		r.pointsNote = unspent
+			.. " passive points are unspent (available "
+			.. avail
+			.. ", used "
+			.. used
+			.. "). Allocate them (optimize_passives / alloc_passive) or tell the user why "
+			.. "they're parked — an export with unspent points looks incomplete."
+	end
+	return r
 end
 
 -- Enumerate PoB configuration options usable with set_config (filterable).
@@ -702,8 +787,20 @@ function methods.optimize_passives(p)
 	local result = {
 		metric = metric,
 		pointsUsed = used,
+		pointsRemaining = math.max(0, budget),
 		allocated = chosen,
 	}
+	-- Greedy stops when no remaining node improves the metric, so it often leaves points unspent.
+	-- Flag it so they're not silently dropped from the export.
+	if budget > 0 then
+		result.note = budget
+			.. " points left unspent — no remaining "
+			.. nodeType
+			.. " improved "
+			.. metric
+			.. ". Spend them with a different metric (try 'balanced'), node_type, or alloc_passive, "
+			.. "or note to the user that they're parked for later gear/scaling."
+	end
 	if balanced then
 		-- single-metric value is meaningless here; report the DPS/EHP pair instead.
 		result.startDPS, result.finalDPS = startDPS, (mo1.TotalDPS) or startDPS

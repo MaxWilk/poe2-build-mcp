@@ -1,0 +1,100 @@
+name: Refresh data
+
+# Keep the corpus (game data + wiki mechanics) fresh WITHOUT cutting a new release. Runs on a
+# schedule, polls upstream, and only rebuilds + republishes when the upstream source actually
+# changed (hash-gated — no spurious publishes). It refreshes the DATA assets (corpus + manifest)
+# on the current latest release IN PLACE; it does NOT rebuild the engine (PoB only moves on a
+# deliberate, golden-gated app release) or the per-OS .mcpb bundles. Clients auto-pull the new
+# corpus at next launch via server/live/update.py. Public repo → free CI minutes.
+on:
+  schedule:
+    - cron: "17 6 * * *" # daily ~06:17 UTC
+  workflow_dispatch: {} # allow a manual run
+
+permissions:
+  contents: write
+
+env:
+  POB_BRANCH: dev
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+      # PoB clone is needed for unique-item parsing in the corpus build (not the engine).
+      - name: Clone pinned PoB (for uniques)
+        run: git clone --depth 1 --branch ${{ env.POB_BRANCH }} https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+      - run: uv sync
+
+      - name: Fetch upstream (RePoE + wiki)
+        run: uv run python -c "from pipeline import build_corpus; build_corpus.fetch_all(refresh=True)"
+
+      - name: Change gate (hash upstream vs published source_sha)
+        id: gate
+        run: |
+          NEW=$(python - <<'PY'
+          import hashlib, glob, os
+          h = hashlib.sha256()
+          for p in sorted(glob.glob("data/raw/*.json")) + sorted(glob.glob("data/raw/wiki/*.json")):
+              h.update(os.path.basename(p).encode()); h.update(open(p,"rb").read())
+          print(h.hexdigest())
+          PY
+          )
+          CUR=$(curl -fsSL "https://github.com/${{ github.repository }}/releases/latest/download/update-manifest.json" \
+            | python -c "import sys,json; print(json.load(sys.stdin).get('source_sha',''))" || echo "")
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          if [ -n "$CUR" ] && [ "$NEW" = "$CUR" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Upstream unchanged ($NEW) — nothing to publish."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Upstream changed (was '$CUR', now '$NEW') — rebuilding."
+          fi
+
+      - name: Build corpus + gate on tests
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          uv run python -m pipeline.build_corpus
+          uv run pytest -q
+
+      - name: Assemble refreshed manifest (preserve engine + app_version)
+        if: steps.gate.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST=$(gh release view --json tagName -q .tagName)
+          if [ -z "$LATEST" ]; then echo "No release to attach to — skipping."; exit 0; fi
+          echo "Refreshing data assets on release: $LATEST"
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/latest/download/update-manifest.json" -o cur-manifest.json
+          mkdir -p rel && cp data/corpus.sqlite rel/corpus.sqlite
+          python - "${{ steps.gate.outputs.new }}" "${{ github.run_number }}" <<'PY'
+          import hashlib, json, sys
+          src_sha, run = sys.argv[1], sys.argv[2]
+          cur = json.load(open("cur-manifest.json"))
+          def sha(p): return hashlib.sha256(open(p, "rb").read()).hexdigest()
+          app = str(cur.get("app_version") or cur.get("version", "0")).lstrip("v")
+          manifest = {
+              "version": f"{app}.{run}",        # data version: monotonic, > app_version, < next app release
+              "app_version": app,               # unchanged → no "new .mcpb" nag
+              "pob_commit": cur.get("pob_commit"),
+              "source_sha": src_sha,
+              # corpus replaced in place on the latest release; engine preserved (unchanged)
+              "corpus": {"url": cur["corpus"]["url"], "sha256": sha("rel/corpus.sqlite")},
+              "engine": cur.get("engine"),
+          }
+          json.dump(manifest, open("rel/update-manifest.json", "w"), indent=2)
+          print(json.dumps(manifest, indent=2))
+          PY
+          echo "TAG=$LATEST" >> "$GITHUB_ENV"
+
+      - name: Publish refreshed assets to the latest release
+        if: steps.gate.outputs.changed == 'true' && env.TAG != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: |
+            rel/corpus.sqlite
+            rel/update-manifest.json

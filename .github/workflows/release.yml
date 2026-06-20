@@ -95,13 +95,26 @@ jobs:
             -x '*.zst' '*.dds' '*.png' '*.jpg' '*.jpeg' '*.tga' '*.gif' '*.bk2' '*.mp4' '*.ogg' '*.mp3'
           POB_COMMIT=$(git -C pob/PathOfBuilding-PoE2 rev-parse --short HEAD)
           BASE="https://github.com/${{ github.repository }}/releases/latest/download"
-          python - "$POB_COMMIT" "$BASE" <<'PY'
+          # source_sha = hash of the deterministic upstream inputs (RePoE + wiki), so the scheduled
+          # refresh can detect "did upstream change?" without false positives from build timestamps.
+          SRC_SHA=$(python - <<'PY'
+          import hashlib, glob, os
+          h = hashlib.sha256()
+          for p in sorted(glob.glob("data/raw/*.json")) + sorted(glob.glob("data/raw/wiki/*.json")):
+              h.update(os.path.basename(p).encode()); h.update(open(p,"rb").read())
+          print(h.hexdigest())
+          PY
+          )
+          python - "$POB_COMMIT" "$BASE" "$SRC_SHA" <<'PY'
           import hashlib, json, sys
-          commit, base = sys.argv[1], sys.argv[2]
+          commit, base, src_sha = sys.argv[1], sys.argv[2], sys.argv[3]
           def sha(p): return hashlib.sha256(open(p,"rb").read()).hexdigest()
+          tag = "${{ github.ref_name }}"
           manifest = {
-              "version": "${{ github.ref_name }}",
+              "version": tag,                       # data version (apply_updates compares this)
+              "app_version": tag.lstrip("v"),       # .mcpb/code version (decoupled .mcpb nag)
               "pob_commit": commit,
+              "source_sha": src_sha,
               "corpus": {"url": f"{base}/corpus.sqlite", "sha256": sha("rel/corpus.sqlite")},
               "engine": {"url": f"{base}/pob-engine.zip", "sha256": sha("rel/pob-engine.zip")},
           }

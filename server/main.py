@@ -29,6 +29,7 @@ from .live import meta as live_meta
 from .live import prices as live_prices
 from .live import update as live_update
 from .live import version as live_version
+from .live import wiki as live_wiki
 
 # Operating guide handed to the LLM client (surfaced as "MCP Server Instructions").
 # Sourced from a bundled markdown file so it's both human-editable and actually delivered;
@@ -457,12 +458,67 @@ def find_supports_for(skill: str, limit: int = 25) -> dict[str, Any]:
 
 @mcp.tool()
 def explain_mechanic(topic: str) -> dict[str, Any]:
-    """Explain a Path of Exile 2 mechanic (concise reference).
+    """Explain a Path of Exile 2 mechanic (corpus — offline, deterministic).
 
-    Topics include: resistances, ailments, armour, evasion, energy_shield, spirit,
-    critical_strike, ehp, accuracy, recovery. Returns the available topic list if not found.
+    Returns our evergreen `principle` (hand-authored) plus the matching auto-refreshed `wiki`
+    page when one exists (attributed: PoE2 Wiki, CC BY-NC-SA 3.0 — cite it when you use it).
+    Curated principle topics include: resistances, ailments, armour, evasion, energy_shield,
+    spirit, critical_strike, ehp, accuracy, recovery. If nothing matches, use `search_mechanics`
+    to browse, or `lookup_mechanic` to fetch a page live from the wiki.
     """
     return mechanics.explain(topic)
+
+
+@mcp.tool()
+def search_mechanics(query: str, limit: int = 8) -> dict[str, Any]:
+    """Full-text search the bundled wiki mechanics tier (corpus — offline, deterministic).
+
+    Returns matching page titles + snippets + source links so you can pick one to read with
+    `explain_mechanic`. Wiki content is PoE2 Wiki, CC BY-NC-SA 3.0 — attribute it when quoting.
+    For a page not bundled here, use `lookup_mechanic` (live wiki fetch).
+    """
+    results = corpus.search_mechanics(query, limit=limit)
+    return {
+        "query": query,
+        "results": results,
+        "note": "Bundled wiki mechanics (CC BY-NC-SA 3.0). Use explain_mechanic(title) to read "
+        "one; lookup_mechanic(topic) to fetch a page not in the corpus.",
+    }
+
+
+@mcp.tool()
+def relevant_mechanics() -> dict[str, Any]:
+    """The mechanics worth understanding for the ACTIVE build (corpus + engine).
+
+    Reads the current build's signals — main skill + its tags (and the ailment its damage type
+    builds), keystones, ascendancy notables, plus staples — and points each at its best corpus
+    mechanics page. Also surfaces the engine's damage diagnostic, so an uncomputable layer
+    (reservation buff, undamageable minion, %-life/corpse detonation) is called out up front.
+    Use it when starting/auditing a build to read up before theorycrafting.
+    """
+    eng = get_engine()
+    build = eng.get_build()
+    skill = build.get("mainSkill")
+    tags: list[str] = []
+    if skill:
+        gem = corpus.get_gem(skill)
+        if gem:
+            tags = gem.get("tags") or []
+    topics = mechanics.relevant(
+        skill=skill,
+        tags=tags,
+        keystones=build.get("keystones") or [],
+        ascendancy=build.get("ascendancyNotables") or [],
+    )
+    diagnostic = eng.get_stats(["TotalDPS"]).get("warning")
+    return {
+        "mainSkill": skill,
+        "relevant": topics,
+        "diagnostic": diagnostic,
+        "note": "Read these with explain_mechanic(title); use lookup_mechanic for anything not "
+        "listed. Wiki content is CC BY-NC-SA 3.0 — attribute it. If `diagnostic` is set, that "
+        "damage layer isn't engine-computable — validate it in-game.",
+    }
 
 
 @mcp.tool()
@@ -583,6 +639,19 @@ def get_meta_builds(league: str | None = None, limit: int = 15) -> dict[str, Any
         return live_meta.get_meta_builds(league=league, limit=limit)
     except live_meta.MetaError as e:
         return {"ok": False, "error": f"meta data unavailable: {e}"}
+
+
+@mcp.tool()
+def lookup_mechanic(topic: str) -> dict[str, Any]:
+    """Fetch a concise mechanic/skill/item explanation LIVE from the PoE2 Wiki (live — network).
+
+    The long-tail escape hatch: use this only when `explain_mechanic`/`search_mechanics` don't
+    have the topic in the bundled corpus. Returns a short lead extract + source link, attributed
+    (PoE2 Wiki, CC BY-NC-SA 3.0 — cite it). Time-sensitive and may be outdated; the engine
+    remains the source of truth for any number. Returns {available: false} if the wiki is
+    unreachable. Single, user-triggered, read-only — it never sends your build anywhere.
+    """
+    return live_wiki.lookup_mechanic(topic)
 
 
 @mcp.tool()
