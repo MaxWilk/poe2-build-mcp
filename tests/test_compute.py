@@ -440,6 +440,52 @@ def test_set_skill_recovers_after_bad_input(engine):
     assert "Controlled Destruction" in names and "Lightning Penetration" in names
 
 
+def test_jewel_sockets_and_equip(engine):
+    # list_jewel_sockets enumerates tree sockets; equip_jewel into an ALLOCATED socket applies its
+    # mods (mana rises), and auto-pick fails cleanly when nothing is allocated.
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.paste_skill("Spark 20/20  1")
+    socks = engine.list_jewel_sockets()["sockets"]
+    assert socks and all({"socket", "allocated", "filled"} <= set(s) for s in socks)
+    # nothing allocated yet -> auto-pick reports cleanly instead of wasting the jewel
+    assert engine.equip_jewel("Rarity: Rare\nTJ\nSapphire\n+50 to maximum Mana")["ok"] is False
+    sid = socks[0]["socket"]
+    assert engine.call("alloc_passive", node=sid).get("ok")
+    mana0 = engine.get_stats(["Mana"])["stats"]["Mana"]
+    r = engine.equip_jewel("Rarity: Rare\nTJ\nSapphire\n+50 to maximum Mana", socket=sid)
+    assert r["ok"] and not r.get("warning")
+    assert engine.get_stats(["Mana"])["stats"]["Mana"] > mana0  # jewel's mana applied
+
+
+def test_equip_jewel_warns_on_unallocated_socket(engine):
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.paste_skill("Spark 20/20  1")
+    sid = engine.list_jewel_sockets()["sockets"][0]["socket"]  # unallocated
+    r = engine.equip_jewel("Rarity: Rare\nTJ\nSapphire\n+50 to maximum Mana", socket=sid)
+    assert r["ok"] and r.get("warning") and "not allocated" in r["warning"].lower()
+
+
+def test_add_skill_group_in_full_dps_aggregates(engine):
+    # A second DAMAGE skill flagged in_full_dps aggregates into FullDPS (clear+boss); without the
+    # flag (auras) it would not. Here a second Spark roughly doubles FullDPS over one skill.
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.add_item(
+        "Rarity: Rare\nW\nDueling Wand\nAdds 1 to 85 Lightning Damage to Spells\n"
+        "100% increased Spell Damage"
+    )
+    engine.paste_skill("Spark 20/20  1")
+    total = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    engine.add_skill_group("Spark 20/20  1", include_in_full_dps=True)
+    full = engine.get_stats(["FullDPS"])["stats"]["FullDPS"]
+    assert full > total * 1.5  # the second damage skill aggregated into FullDPS
+
+
 def test_set_skill_computes_full_dps(engine):
     # FullDPS is off by default in PoB (only summed for groups flagged "include in Full DPS").
     # set_skill now flags the main group, so FullDPS is computed — equal to TotalDPS for a single

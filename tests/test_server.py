@@ -27,7 +27,63 @@ def test_workflow_prompts_registered():
 
 def test_tool_surface_intact():
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 51
+    assert len(tools) == 55
+    names = {t.name for t in tools}
+    assert {
+        "list_jewel_sockets",
+        "equip_jewel",
+        "apply_combat_profile",
+        "pinnacle_readiness",
+    } <= names
+
+
+def test_apply_combat_profile_sets_conditions(monkeypatch):
+    from server import main
+
+    captured: dict = {}
+
+    class _Stub:
+        def set_config(self, options=None, custom_mods=None):
+            captured["options"] = options
+            return {"stats": {"TotalDPS": 1}}
+
+    monkeypatch.setattr(main, "get_engine", lambda: _Stub())
+    r = main.apply_combat_profile(tier="Pinnacle", shocked=True, cursed=False)
+    opts = captured["options"]
+    assert opts["enemyIsBoss"] == "Pinnacle"
+    assert opts.get("conditionEnemyShocked") is True
+    assert "conditionEnemyCursed" not in opts  # cursed=False omitted
+    assert r["assumptions"] and any("Shocked" in a for a in r["assumptions"])
+
+
+def test_pinnacle_readiness_gate(monkeypatch):
+    from server import main
+
+    class _Stub:
+        def get_defenses(self):
+            return {
+                "resistances": {"fire": 75, "cold": 75, "lightning": 75, "chaos": 40},
+                "resistOverCap": {"fire": 10, "cold": 8, "lightning": 12},
+                "totalEHP": 30000,
+            }
+
+        def get_build(self):
+            return {"keystones": [], "stats": {"FullDPS": 600000, "TotalDPS": 50000}}
+
+    monkeypatch.setattr(main, "get_engine", lambda: _Stub())
+    r = main.pinnacle_readiness(min_ehp=25000, min_dps=500000)
+    assert r["pass"] is False  # chaos 40, not CI -> fails the chaos check
+    checks = {c["check"]: c for c in r["checks"]}
+    assert checks["elemental resists capped (75%)"]["ok"]  # DPS uses FullDPS (600k >= 500k)
+
+    class _CI(_Stub):
+        def get_build(self):
+            d = _Stub.get_build(self)
+            d["keystones"] = ["Chaos Inoculation"]
+            return d
+
+    monkeypatch.setattr(main, "get_engine", lambda: _CI())
+    assert main.pinnacle_readiness(min_ehp=25000, min_dps=500000)["pass"] is True
 
 
 def test_equip_item_flags_illegal_affixes(monkeypatch):

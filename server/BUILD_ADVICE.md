@@ -68,6 +68,18 @@ A useful sanity check: realistic gear should reach high six figures on a strong 
 engine shows far less, suspect either a missing core multiplier (above) or that a mechanic isn't
 being modeled — note the latter rather than trusting the low number.
 
+**Measure the right number, with the fight realistic.** For multi-projectile/overlap skills (e.g.
+Spark) read **FullDPS** (PoB's combined figure), not the per-hit `TotalDPS` — and compare builds
+like-for-like (FullDPS↔FullDPS, never one's TotalDPS vs another's FullDPS). The engine's enemy
+conditions are **off by default**, so a bare stat read understates a real fight: use
+`apply_combat_profile` to switch on the shock/curse/charges/boss-tier the build actually maintains
+before judging DPS (turn off any it can't sustain — they'd inflate the number). The mana *pool*
+isn't automatically the master lever: a real Archmage **Spark** meta build runs only ~2k mana and
+gets most of its damage from projectiles + penetration + curses, not pool size — let `rank_levers`
+find the lever that actually moves *this* build. Don't skip **jewels** (`list_jewel_sockets` /
+`equip_jewel`): mana/ES/damage stat jewels are a meaningful chunk of a stacker's power. When the
+build looks done, gate it with `pinnacle_readiness` (resists + chaos + EHP + DPS), not raw EHP alone.
+
 ## Defense: the survival checklist
 
 Survivability is **layered**: avoidance × mitigation × hit-pool × recovery, plus ailment and

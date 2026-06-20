@@ -145,8 +145,25 @@ class PobEngine:
     def paste_skill(self, text: str) -> dict[str, Any]:
         return self.call("paste_skill", text=normalize_skill_text(text))
 
-    def add_skill_group(self, text: str) -> dict[str, Any]:
-        return self.call("add_skill_group", text=normalize_skill_text(text))
+    def add_skill_group(self, text: str, include_in_full_dps: bool = False) -> dict[str, Any]:
+        return self.call(
+            "add_skill_group",
+            text=normalize_skill_text(text),
+            includeInFullDPS=include_in_full_dps,
+        )
+
+    def list_jewel_sockets(self) -> dict[str, Any]:
+        return self.call("list_jewel_sockets")
+
+    def equip_jewel(
+        self, raw: str, socket: int | None = None, keys: list[str] | None = None
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"raw": raw}
+        if socket is not None:
+            params["socket"] = socket
+        if keys is not None:
+            params["keys"] = keys
+        return self.call("equip_jewel", **params)
 
     def get_stats(self, keys: list[str] | None = None) -> dict[str, Any]:
         return self.call("get_stats", keys=keys)

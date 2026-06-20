@@ -64,9 +64,11 @@ All compute tools operate on a single in-memory build that persists across calls
 3. `optimize_passives` for the tree — `metric="balanced"`, or `goals={"TotalDPS":.5,"Life":.5}`
    for a weighted mix, or `require=[…]` to force keystones. `points=0` fills the budget.
 4. `optimize_item` per slot to craft best-in-slot gear (or `equip_item` real items;
-   `scaffold_gear` only to close *defensive* gaps on a skeleton).
-5. `set_config({enemyIsBoss:"Pinnacle"})` for a realistic boss, then `get_defenses` (re-cap
-   resists!) + `evaluate_build(goals)` against the player's content bar.
+   `scaffold_gear` only to close *defensive* gaps on a skeleton). `equip_jewel` into allocated
+   tree sockets (`list_jewel_sockets`) — jewels are real power for stackers, don't skip them.
+5. `apply_combat_profile` to switch on the realistic fight (boss tier + shock/curse/charges the
+   build maintains) so DPS isn't the bare default, then `get_defenses` (re-cap resists!) and gate
+   with `pinnacle_readiness` + `evaluate_build(goals)` against the player's content bar.
 6. `get_prices` to sanity-check cost → present, with `export_build`. **A build that fails the gate
    is flagged, not recommended.**
 
@@ -82,6 +84,10 @@ realize it, then re-check defenses.
 - Which stat to chase next → `rank_levers`. How much of it to hit a target → `solve_for`
   (`list_levers` shows named levers). A/B two builds → `compare_to`.
 - "Is this build good?" → `evaluate_build` (numbers) + `build_advice("red flags")` (judgment).
+  Endgame/pinnacle defense gate → `pinnacle_readiness` (resists + chaos + EHP + DPS, not raw EHP).
+- Realistic boss DPS (not the bare default) → `apply_combat_profile`. Add tree jewels →
+  `equip_jewel` (+ `list_jewel_sockets`). Curses/second damage skill → `add_skill_group`
+  (`in_full_dps=True` for a second damage skill so FullDPS aggregates).
 - How does mechanic X work → `explain_mechanic`/`search_mechanics`; not in corpus → `lookup_mechanic`.
 - Complete a skeleton's defenses fast → `scaffold_gear`. Read an item's tiers → `parse_item`.
 
@@ -123,9 +129,11 @@ realize it, then re-check defenses.
   build can't be made crit without a base crit source.
 - **Passive points are level-driven.** `optimize_passives(points<=0)` fills the remaining budget;
   watch `unspentPoints`/`pointsRemaining`/`pointsNote` and `alloc_passive`'s over-budget warning.
-- **Jewels:** `import_build` reads and computes a build's jewels, but there's no from-scratch
-  jewel-socket tool yet — when building from scratch you can't add tree jewels, so a meta build's
-  jewel contribution (often significant for mana/ES stackers) will be missing from yours. Say so.
+- **Jewels:** allocate a Socket node (`alloc_passive`), then `equip_jewel` into it
+  (`list_jewel_sockets` shows sockets + which are allocated). A jewel in an UN-allocated socket
+  does nothing (the result warns). Jewels aren't covered by the equip legality check, so ground
+  their mods in real rolls (`search_mods`). Weapon-swap + jewel sockets are normal slots —
+  `equip_item slot="Weapon 1 Swap"` works for a curse-on-swap weapon.
 - **Imported PoBs are often aspirational.** `import_build` returns `importCaveats` when the build
   carries author-added custom mods, an over-budget tree, or uncapped resists — factor those in
   before trusting its raw numbers (a shared "millions" PoB may assume gear/points it doesn't show).

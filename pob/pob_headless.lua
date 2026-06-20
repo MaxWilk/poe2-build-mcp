@@ -460,8 +460,15 @@ end
 -- This is how caster damage layers (auras, Archmage mana-stacking) get modelled.
 function methods.add_skill_group(p)
 	assert(p and p.text, "add_skill_group requires params.text")
+	local list = build.skillsTab.socketGroupList
 	local prevMain = build.mainSocketGroup or 1
+	local before = #list
 	build.skillsTab:PasteSocketGroup(normalizeSkillText(p.text))
+	-- Optionally include a second DAMAGE skill in FullDPS (clear+boss, triggers). Off by default so
+	-- auras/heralds/buffs don't inflate the combined number.
+	if p.includeInFullDPS and #list > before then
+		list[#list].includeInFullDPS = true
+	end
 	runCallback("OnFrame")
 	-- keep the existing main skill; the new group stays enabled and applies its effect
 	selectMainSocketGroup(prevMain)
@@ -590,6 +597,88 @@ function methods.add_item(p)
 	end
 	runCallback("OnFrame")
 	return { ok = true, slot = slotOrErr, stats = collectStats(p.keys) }
+end
+
+-- List the passive tree's jewel sockets so a jewel can be placed. A jewel only contributes when its
+-- socket node is ALLOCATED; `filled` shows whether one is already socketed there.
+function methods.list_jewel_sockets()
+	local spec = build.spec
+	local out = {}
+	for id, sc in pairs(build.itemsTab.sockets or {}) do
+		local node = spec.nodes[id]
+		out[#out + 1] = {
+			socket = id,
+			allocated = (node and node.alloc) and true or false,
+			filled = (sc.selItemId and sc.selItemId ~= 0) and true or false,
+			name = (node and (node.dn or node.name)) or "Jewel Socket",
+		}
+	end
+	table.sort(out, function(a, b)
+		if a.allocated ~= b.allocated then
+			return a.allocated -- allocated sockets first
+		end
+		return a.socket < b.socket
+	end)
+	return { sockets = out }
+end
+
+-- Place a jewel (raw PoB item text) into a tree jewel socket. p.socket is a socket id from
+-- list_jewel_sockets; if omitted, the first ALLOCATED empty socket is used. A jewel in an
+-- unallocated socket does nothing, so we warn instead of silently wasting it.
+function methods.equip_jewel(p)
+	assert(p and p.raw, "equip_jewel requires params.raw")
+	local spec = build.spec
+	local socket = p.socket
+	if socket == nil then
+		local ids = {}
+		for id in pairs(build.itemsTab.sockets or {}) do
+			ids[#ids + 1] = id
+		end
+		table.sort(ids)
+		for _, id in ipairs(ids) do
+			local sc = build.itemsTab.sockets[id]
+			local node = spec.nodes[id]
+			if node and node.alloc and not (sc.selItemId and sc.selItemId ~= 0) then
+				socket = id
+				break
+			end
+		end
+		if socket == nil then
+			return {
+				ok = false,
+				error = "no allocated empty jewel socket — allocate a Socket node (alloc_passive) "
+					.. "or pass socket= from list_jewel_sockets.",
+			}
+		end
+	end
+	if not build.itemsTab.sockets[socket] then
+		return {
+			ok = false,
+			error = "unknown jewel socket '"
+				.. tostring(socket)
+				.. "' — see list_jewel_sockets for valid socket ids.",
+		}
+	end
+	local ok, slotOrErr = equipItemRaw(p.raw, "Jewel " .. tostring(socket))
+	if not ok then
+		return {
+			ok = false,
+			error = "could not place jewel ("
+				.. slotOrErr
+				.. "). Check the base is a real jewel base (e.g. 'Sapphire') on its own line "
+				.. "under the name.",
+		}
+	end
+	runCallback("OnFrame")
+	local node = spec.nodes[socket]
+	local r = { ok = true, socket = socket, stats = collectStats(p.keys) }
+	if not (node and node.alloc) then
+		r.warning = "socket "
+			.. tostring(socket)
+			.. " is NOT allocated — this jewel contributes nothing until you allocate it "
+			.. "(alloc_passive)."
+	end
+	return r
 end
 
 -- Batch-evaluate many candidate items in one slot, returning each one's requested stats. Used by

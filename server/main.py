@@ -228,7 +228,7 @@ def set_skill(skill: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def add_skill_group(skill: str) -> dict[str, Any]:
+def add_skill_group(skill: str, in_full_dps: bool = False) -> dict[str, Any]:
     """Add an ENABLED secondary skill group (aura, herald, or persistent buff) WITHOUT changing
     the main skill — so its buff/reservation applies to the active build.
 
@@ -237,8 +237,12 @@ def add_skill_group(skill: str) -> dict[str, Any]:
     ("<Gem> <level>/<quality>  <count>", supports newline-separated). The group is added enabled
     and its effect is reflected in the returned stats; the main skill is preserved. Mind Spirit
     reservation — check it still fits (get_build_stats / list_config_options) after stacking auras.
+
+    Set `in_full_dps=True` only for a second DAMAGE skill (clear+boss combo, a trigger/totem) so it
+    aggregates into FullDPS. Leave it False for auras/heralds/buffs (otherwise their standalone
+    damage inflates the combined number).
     """
-    return get_engine().add_skill_group(skill)
+    return get_engine().add_skill_group(skill, include_in_full_dps=in_full_dps)
 
 
 @mcp.tool()
@@ -253,6 +257,57 @@ def set_config(
     Recomputes and returns stats.
     """
     return get_engine().set_config(options=options, custom_mods=custom_mods)
+
+
+@mcp.tool()
+def apply_combat_profile(
+    tier: str = "Pinnacle",
+    shocked: bool = True,
+    cursed: bool = True,
+    power_charges: bool = True,
+    frenzy_charges: bool = True,
+    full_es: bool = True,
+    full_life: bool = False,
+) -> dict[str, Any]:
+    """Apply a realistic boss-combat profile in one call, so DPS reflects an actual fight.
+
+    The engine's enemy-condition levers are OFF by default, so a bare `get_build_stats` understates
+    a build that, in play, keeps shock/curse/charges up. This sets the common ones at once
+    (`enemyIsBoss`=tier plus the toggles) and returns the resulting stats.
+
+    IMPORTANT — these are ASSUMPTIONS the build must actually produce: only keep `shocked` if the
+    build shocks, `cursed` if it runs a curse, the charge flags if it generates them. Turn off the
+    ones that don't apply (they'd otherwise inflate DPS with effects the build can't sustain). The
+    response lists what was assumed. Tiers: None / Boss / Pinnacle / Uber.
+    """
+    options: dict[str, Any] = {"enemyIsBoss": tier}
+    assumptions = [f"enemy tier = {tier}"]
+    if shocked:
+        options["conditionEnemyShocked"] = True
+        assumptions.append("enemy is Shocked (needs your build to shock)")
+    if cursed:
+        options["conditionEnemyCursed"] = True
+        assumptions.append("enemy is Cursed (needs a curse skill applied)")
+    if power_charges:
+        options["usePowerCharges"] = True
+        assumptions.append("Power Charges up (needs generation)")
+    if frenzy_charges:
+        options["useFrenzyCharges"] = True
+        assumptions.append("Frenzy Charges up (needs generation)")
+    if full_es:
+        options["conditionsOnFullEnergyShield"] = True
+        assumptions.append("on Full Energy Shield")
+    if full_life:
+        options["conditionsOnFullLife"] = True
+        assumptions.append("on Full Life")
+    res = get_engine().set_config(options=options)
+    res["assumptions"] = assumptions
+    res["note"] = (
+        "DPS now assumes these combat conditions are active — verify the build actually maintains "
+        "each (shock/curse/charges) or disable the ones it can't. This is the realistic fighting "
+        "number, not a guaranteed floor."
+    )
+    return res
 
 
 @mcp.tool()
@@ -322,8 +377,33 @@ def equip_item(raw: str, slot: str | None = None) -> dict[str, Any]:
 
 @mcp.tool()
 def unequip_item(slot: str) -> dict[str, Any]:
-    """Clear an equipment slot on the active build (e.g. "Ring 2", "Body Armour", "Weapon 1")."""
+    """Clear an equipment slot on the active build (e.g. "Ring 2", "Body Armour", "Weapon 1").
+
+    Weapon-swap slots ("Weapon 1 Swap"/"Weapon 2 Swap") and jewel sockets are valid slots too;
+    use `equip_item`/`equip_jewel` to fill them.
+    """
     return get_engine().unequip_item(slot)
+
+
+@mcp.tool()
+def list_jewel_sockets() -> dict[str, Any]:
+    """List the passive tree's jewel sockets: each socket's `id`, whether it's `allocated`, and
+    whether it's already `filled`. A jewel only contributes when its socket is allocated (allocate
+    a Socket node with `alloc_passive` first). Use a socket `id` with `equip_jewel`.
+    """
+    return get_engine().list_jewel_sockets()
+
+
+@mcp.tool()
+def equip_jewel(raw: str, socket: int | None = None) -> dict[str, Any]:
+    """Socket a jewel (raw PoB item text) into a passive-tree jewel socket.
+
+    `socket` is a socket id from `list_jewel_sockets`; if omitted, the first allocated empty socket
+    is used. The jewel only applies in an ALLOCATED socket (the result warns otherwise). Ground the
+    jewel's mods in real jewel rolls (`search_mods`) — jewels aren't covered by the equip legality
+    check. Mana/ES/damage stat jewels are a meaningful chunk of mana-stacker power.
+    """
+    return get_engine().equip_jewel(raw, socket=socket)
 
 
 @mcp.tool()
@@ -353,6 +433,68 @@ def evaluate_build(goals: dict[str, Any]) -> dict[str, Any]:
         all_ok = all_ok and ok
         results.append({"stat": stat, "value": value, "min": lo, "max": hi, "ok": ok})
     return {"pass": all_ok, "results": results}
+
+
+@mcp.tool()
+def pinnacle_readiness(min_ehp: float = 25000, min_dps: float = 500000) -> dict[str, Any]:
+    """Gate a build against the endgame/pinnacle checklist — defense beyond raw EHP, plus a DPS bar.
+
+    Engine-computed pass/fail for: elemental resists capped, chaos handled (capped OR Chaos
+    Inoculation), a resist over-cap buffer (advisory, vs penetration/curses), EHP ≥ `min_ehp`, and
+    DPS ≥ `min_dps` (uses FullDPS when higher). `min_ehp`/`min_dps` default to a generic pinnacle
+    bar — set them to the player's actual content. `pass` covers the critical criteria; the buffer
+    is advisory. Verify recovery (regen/leech/recoup), ailment/stun handling, and DPS uptime
+    in-game — those aren't fully captured by static numbers.
+    """
+    eng = get_engine()
+    d = eng.get_defenses()
+    b = eng.get_build()
+    res = d.get("resistances") or {}
+    over = d.get("resistOverCap") or {}
+    stats = b.get("stats") or {}
+    ci = "Chaos Inoculation" in (b.get("keystones") or [])
+    ehp = d.get("totalEHP") or stats.get("TotalEHP") or 0
+    dps = max(stats.get("FullDPS") or 0, stats.get("TotalDPS") or 0)
+    elems = ("fire", "cold", "lightning")
+
+    checks = [
+        {
+            "check": "elemental resists capped (75%)",
+            "ok": all((res.get(e) or 0) >= 75 for e in elems),
+            "detail": {e: res.get(e) for e in elems},
+        },
+        {
+            "check": "chaos handled",
+            "ok": ci or (res.get("chaos") or 0) >= 75,
+            "detail": "Chaos Inoculation" if ci else f"chaos resist {res.get('chaos')}",
+        },
+        {
+            "check": f"EHP >= {int(min_ehp)}",
+            "ok": ehp >= min_ehp,
+            "detail": round(ehp),
+        },
+        {
+            "check": f"DPS >= {int(min_dps)}",
+            "ok": dps >= min_dps,
+            "detail": round(dps),
+        },
+        {
+            "check": "resist over-cap buffer (advisory)",
+            "ok": all((over.get(e) or 0) >= 5 for e in elems),
+            "detail": {e: over.get(e) for e in elems},
+            "advisory": True,
+        },
+    ]
+    critical = [c for c in checks if not c.get("advisory")]
+    return {
+        "pass": all(c["ok"] for c in critical),
+        "checks": checks,
+        "note": (
+            "Engine numbers; `pass` = the critical criteria (resists, chaos, EHP, DPS). Thresholds "
+            "are defaults — pass min_ehp/min_dps for the player's content. Still verify recovery, "
+            "ailment/stun handling, and DPS uptime in-game."
+        ),
+    }
 
 
 @mcp.tool()
