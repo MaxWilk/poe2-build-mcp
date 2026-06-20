@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Your AI build companion for Path of Exile 2. Import a build for real Path of Building numbers, theorycraft and optimize upgrades, search items, gems, and uniques, and check live prices — every stat computed by the engine, never guessed.",
   "icon": "assets/icon.png",
   "author": {
@@ -41,6 +41,7 @@
     { "name": "evaluate_build", "description": "Check the build against numeric goals." },
     { "name": "compare_to", "description": "A/B the active build against another." },
     { "name": "solve_for", "description": "Solve for the modifier magnitude needed to hit a stat target." },
+    { "name": "list_levers", "description": "List named levers for solve_for/rank_levers (discoverability)." },
     { "name": "rank_levers", "description": "Rank stat levers by marginal gain — the min/max 'where to invest' tool." },
     { "name": "search_passives", "description": "Search the passive tree." },
     { "name": "alloc_passive", "description": "Allocate a passive node (auto-routed)." },

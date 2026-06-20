@@ -27,11 +27,29 @@ LEVERS: dict[str, str] = {
     "increased chaos damage": "{}% increased Chaos Damage",
     "increased spell damage": "{}% increased Spell Damage",
     "increased attack damage": "{}% increased Attack Damage",
+    "increased projectile damage": "{}% increased Projectile Damage",
+    "projectile damage": "{}% increased Projectile Damage",
     "increased attack speed": "{}% increased Attack Speed",
     "increased cast speed": "{}% increased Cast Speed",
     "attack speed": "{}% increased Attack Speed",
     "cast speed": "{}% increased Cast Speed",
     "increased critical strike chance": "{}% increased Critical Strike Chance",
+    "critical strike chance": "{}% increased Critical Strike Chance",
+    # PoE2 renamed crit multiplier -> Critical Damage Bonus; accept both names.
+    "critical damage bonus": "+{}% to Critical Damage Bonus",
+    "critical strike multiplier": "+{}% to Critical Damage Bonus",
+    "increased critical damage": "+{}% to Critical Damage Bonus",
+    "penetration": "Damage Penetrates {}% Elemental Resistances",
+    "elemental penetration": "Damage Penetrates {}% Elemental Resistances",
+    "fire penetration": "Damage Penetrates {}% Fire Resistance",
+    "cold penetration": "Damage Penetrates {}% Cold Resistance",
+    "lightning penetration": "Damage Penetrates {}% Lightning Resistance",
+    # flat added damage — single magnitude used for both bounds (a marginal-gain proxy).
+    "added physical damage": "Adds {0} to {0} Physical Damage",
+    "added fire damage": "Adds {0} to {0} Fire Damage",
+    "added cold damage": "Adds {0} to {0} Cold Damage",
+    "added lightning damage": "Adds {0} to {0} Lightning Damage",
+    "added chaos damage": "Adds {0} to {0} Chaos Damage",
     "life": "+{} to maximum Life",
     "maximum life": "+{} to maximum Life",
     "energy shield": "+{} to maximum Energy Shield",
@@ -43,16 +61,37 @@ _MAX_ITERS = 44
 
 
 def _template_for(lever: str) -> str:
-    key = lever.strip().lower()
+    raw = lever.strip()
+    key = raw.lower()
     if key in LEVERS:
         return LEVERS[key]
-    if "{}" in lever:
-        return lever  # caller-supplied raw template
-    return "{}% increased " + lever.strip()  # last resort: treat as an "increased X" stat
+    if "{}" in raw or "{0}" in raw:
+        return raw  # caller-supplied raw template
+    # a directional phrase already ("increased/reduced/more/less X") -> just prepend the magnitude;
+    # don't bolt on another "increased" (which produced "increased increased projectile damage").
+    if key.startswith(("increased ", "reduced ", "more ", "less ")):
+        return "{}% " + raw
+    if raw.startswith("+") or key.startswith("adds "):
+        return raw  # already a flat/additive phrase; caller should include {} if it varies
+    return "{}% increased " + raw  # last resort: treat a bare stat as "increased X"
 
 
 def _fmt(m: float) -> str:
     return str(int(round(m))) if abs(m - round(m)) < 1e-9 else f"{m:.2f}"
+
+
+def list_levers() -> dict[str, Any]:
+    """Named levers usable with solve_for/rank_levers, plus how to pass a custom one."""
+    return {
+        "levers": sorted(LEVERS),
+        "note": (
+            "Pass any of these names as `lever`. Names are forgiving — a directional phrase like "
+            "'increased lightning damage' works even if not listed, and you can pass any PoB "
+            "mod text containing '{}' as the magnitude (e.g. '+{} to Level of all Fire Skills'). "
+            "A lever only helps if it actually applies to the build (crit needs a crit build, "
+            "attack speed needs an attack skill, the damage type must match the skill)."
+        ),
+    }
 
 
 def solve_for(
@@ -101,9 +140,13 @@ def solve_for(
             return {
                 "ok": False,
                 "error": (
-                    f"lever '{template}' does not affect {metric} on this build "
-                    "(not a valid modifier, or it doesn't apply to this skill/defense)"
+                    f"lever '{template}' does not move {metric} on this build — either it's not a "
+                    "modifier PoB recognizes, or it genuinely doesn't apply (e.g. crit on a "
+                    "no-crit build, attack speed on a spell, or a damage type this skill doesn't "
+                    "deal). Check the lever name with list_levers, or pass a raw custom-mod "
+                    "template containing '{}'."
                 ),
+                "hint": "list_levers() shows the named levers; or use any PoB mod text with '{}'.",
             }
         if fhi < target:
             return {

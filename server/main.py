@@ -322,6 +322,18 @@ def rank_levers(
 
 
 @mcp.tool()
+def list_levers() -> dict[str, Any]:
+    """List the named levers accepted by `solve_for` and `rank_levers` (discoverability).
+
+    Returns the recognized lever names plus guidance: names are forgiving (a directional phrase
+    like "increased lightning damage" works even if unlisted), and you can pass any PoB mod text
+    containing "{}" as a custom lever. A lever only moves a metric if it actually applies to the
+    build (crit needs a crit build, attack speed needs an attack skill, the damage type must match).
+    """
+    return solver.list_levers()
+
+
+@mcp.tool()
 def search_passives(
     query: str = "", node_type: str | None = None, limit: int = 30
 ) -> dict[str, Any]:
@@ -602,9 +614,24 @@ def search_uniques(
 
 
 @mcp.tool()
-def get_unique(name: str) -> dict[str, Any] | None:
-    """Return a unique item's full readable text (base, mods) by name."""
-    return corpus.get_unique(name)
+def get_unique(name: str) -> dict[str, Any]:
+    """Return a unique item's full readable text (base, mods) by name.
+
+    If the name is a base type rather than a unique (e.g. "Warmonger Bow"), says so and points to
+    get_item, instead of returning a confusing null.
+    """
+    u = corpus.get_unique(name)
+    if u:
+        return u
+    # disambiguate: a base type isn't a unique — guide the caller rather than returning null
+    if corpus.get_item(name):
+        return {
+            "found": False,
+            "name": name,
+            "note": f"'{name}' is a base item type, not a unique. Use get_item('{name}') for the "
+            "base, or search_uniques to find uniques on that base.",
+        }
+    return {"found": False, "name": name, "note": f"No unique named '{name}'. Try search_uniques."}
 
 
 @mcp.tool()

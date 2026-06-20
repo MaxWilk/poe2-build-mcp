@@ -194,16 +194,18 @@ local function statResult(keys)
 	if w then
 		r.warning = w
 	end
-	-- TotalDPS is per-projectile/per-hit. For a multi-projectile skill, a single target can be
-	-- struck by several projectiles, so effective DPS is higher — flag it so the number isn't
-	-- under-read (the engine can't know how many projectiles land; that's content-dependent).
+	-- Clarify multi-projectile DPS WITHOUT implying shotgunning: PoE2 generally does NOT let
+	-- multiple projectiles from one use stack on a single target, so projectile count is clear/
+	-- coverage (and ailment/secondary feed), not a single-target multiplier.
 	local out = (build.calcsTab and build.calcsTab.mainOutput) or {}
 	local proj = tonumber(out.ProjectileCount) or 0
 	if proj > 1 and (tonumber(out.TotalDPS) or 0) > 0 then
-		r.dpsNote = "TotalDPS is for ONE projectile; this skill fires "
+		r.dpsNote = "This skill fires "
 			.. proj
-			.. " — a single target can be hit by several, so effective DPS is a multiple of this "
-			.. "(more on packs, fewer on a lone boss). Validate the real figure in-game."
+			.. " projectiles. TotalDPS is the single-target figure — PoE2 generally does NOT allow "
+			.. "shotgunning, so do NOT multiply it by projectile count for boss DPS. Extra "
+			.. "projectiles add clear/coverage (and can feed ailments/secondary effects). A few "
+			.. "skills do let projectiles overlap on one target — confirm in-game before assuming."
 	end
 	return r
 end
@@ -410,8 +412,23 @@ function methods.add_item(p)
 	for id in pairs(items) do
 		before[id] = true
 	end
-	build.itemsTab:CreateDisplayItemFromRaw(p.raw)
-	build.itemsTab:AddDisplayItem(true) -- add without auto-equip; we place it explicitly
+	-- PoB's parser throws (e.g. "attempt to index local 'item'") on an unrecognized base type or a
+	-- malformed block; catch it so the tool returns a helpful message instead of a raw traceback.
+	local ok, err = pcall(function()
+		build.itemsTab:CreateDisplayItemFromRaw(p.raw)
+		build.itemsTab:AddDisplayItem(true) -- add without auto-equip; we place it explicitly
+	end)
+	if not ok then
+		return {
+			ok = false,
+			error = "could not parse item — check the BASE TYPE is a real PoE2 base on its own "
+				.. "line directly under the name, and the block is well-formed (Rarity / name / "
+				.. "base, then mods). For attack weapons this matters: an unbound base has no "
+				.. "attack rate and breaks DPS. (PoB: "
+				.. tostring(err)
+				.. ")",
+		}
+	end
 	local newItem
 	for id, it in pairs(items) do
 		if not before[id] then
@@ -420,7 +437,11 @@ function methods.add_item(p)
 		end
 	end
 	if not newItem then
-		return { ok = false, error = "item not created (unrecognized base type?)" }
+		return {
+			ok = false,
+			error = "item not created — the base type is probably unrecognized. Use search_items "
+				.. "to find a valid base name and put it on its own line under the item name.",
+		}
 	end
 	local slot = p.slot or newItem:GetPrimarySlot()
 	local slotControl = build.itemsTab.slots[slot]

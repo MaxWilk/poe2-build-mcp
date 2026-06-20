@@ -175,6 +175,54 @@ def test_optimize_passives_is_deterministic(engine):
     assert first == second
 
 
+def test_equip_bad_base_returns_error_not_crash(engine):
+    # An unrecognized base must not surface a raw Lua traceback (#7).
+    engine.new_build()
+    engine.set_class("Ranger", "Deadeye")
+    r = engine.add_item(
+        "Rarity: Rare\nPhantom String\nNot A Real Bow Base\nAdds 50 to 90 Physical Damage"
+    )
+    assert r.get("ok") is False and "base" in (r.get("error") or "").lower()
+
+
+def test_attack_rate_binds_to_weapon(engine):
+    # Regression for the friend's frozen-Speed report: a bow attack's Speed responds to +attack
+    # speed (the weapon's rate binds to the skill). #1-3 were a broken-weapon downstream effect.
+    engine.new_build()
+    engine.set_class("Ranger", "Deadeye")
+    engine.set_level(90)
+    engine.add_item(
+        "Rarity: Rare\nB\nFanatic Bow\nAdds 40 to 75 Physical Damage\n38% increased Attack Speed",
+        slot="Weapon 1",
+    )
+    engine.paste_skill("Ice Shot 20/20  1")
+    base = engine.get_stats(["Speed"])["stats"]["Speed"]
+    fast = engine.set_config(custom_mods="100% increased Attack Speed")["stats"]["Speed"]
+    assert base > 0 and fast == pytest.approx(base * 2, rel=0.05)
+
+
+def test_multiprojectile_note_does_not_imply_shotgun(engine):
+    # The dpsNote must not tell users to multiply TotalDPS by projectile count (PoE2 has no
+    # shotgunning) — that was a wrong-advice regression (#4-5).
+    _spark_caster(engine)
+    r = engine.paste_skill("Spark 20/20  1")
+    note = (r.get("dpsNote") or "").lower()
+    assert note  # Spark fires many projectiles -> note present
+    assert "multiple of this" not in note  # not the old "effective DPS is a multiple" advice
+    assert "do not multiply" in note and "shotgun" in note  # explicitly warns against shotgun math
+
+
+def test_solver_levers(engine):
+    from server.compute import solver
+
+    # #6: no "increased increased" double-prefix; named levers expand correctly
+    assert solver._template_for("increased projectile damage") == "{}% increased Projectile Damage"
+    assert "{0}" in solver._template_for("added cold damage")
+    assert "Critical Damage Bonus" in solver._template_for("critical strike multiplier")
+    names = solver.list_levers()["levers"]
+    assert "increased projectile damage" in names and len(names) > 20
+
+
 def test_damage_diagnostic_silent_when_computable(engine):
     engine.new_build()
     engine.set_class("Witch", "Infernalist")
@@ -224,7 +272,7 @@ def test_solve_for_noop_lever_detected(fireball):
     base = fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
     # cold damage does nothing for a pure-fire Fireball — must be flagged, not "unreachable"
     r = solver.solve_for(fireball, "TotalDPS", base * 2, "increased cold damage")
-    assert r["ok"] is False and "does not affect" in r["error"]
+    assert r["ok"] is False and "does not move" in r["error"]
 
 
 def test_blank_luajit_override_is_ignored(monkeypatch):

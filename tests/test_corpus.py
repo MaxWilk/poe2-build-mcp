@@ -172,6 +172,14 @@ def test_wiki_extract_trimmed_of_empty_sections():
     assert m and "Related skills" not in m["text"]  # empty section header dropped at ingest
 
 
+def test_get_unique_disambiguates_base_type():
+    # A base type name returns a clear message, not a confusing null (#8).
+    from server.main import get_unique
+
+    r = get_unique("Warmonger Bow")  # a base, not a unique
+    assert r["found"] is False and "base" in r["note"].lower()
+
+
 def test_search_mods_precision():
     # Column-scoped match: a stat-text query must not match unrelated mods via stat ids
     # (e.g. "physical damage" was wrongly returning Armour mods).

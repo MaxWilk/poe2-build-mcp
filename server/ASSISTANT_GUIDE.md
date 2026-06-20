@@ -127,10 +127,11 @@ and defense together instead of glass-cannoning a single stat.
   just equip the new item.
 - **Stat keys are PoB-internal** (`TotalDPS`, `EnergyShield`, `Life`, `TotalEHP`, `Speed`, …).
   Pass them to `get_build_stats`/`get_defenses` when you need specific values.
-- **`TotalDPS` is per-projectile/per-hit.** For multi-projectile skills (Spark, etc.) the response
-  carries `ProjectileCount` and a `dpsNote` — a single target can be struck by several projectiles,
-  so effective DPS is a multiple of `TotalDPS` (more on packs, fewer on a lone boss). Don't quote
-  `TotalDPS` as the whole story for these; say it's per-projectile and that real DPS is higher.
+- **`TotalDPS` is the single-target figure; PoE2 has no shotgunning.** For multi-projectile skills
+  the response carries `ProjectileCount` + a `dpsNote`. Do **not** multiply `TotalDPS` by projectile
+  count for boss DPS — multiple projectiles from one use generally can't stack on a single target.
+  Extra projectiles add clear/coverage (and can feed ailments/secondary effects like Herald procs),
+  not single-target damage. A few skills do let projectiles overlap; confirm in-game before assuming.
 - **Auras/Archmage need `add_skill_group`, not `set_skill`.** `set_skill` sets the *main* skill;
   a persistent buff added with it would just become the main skill (and read ~0 DPS). Add Wrath/
   Herald/Archmage with `add_skill_group` so the buff applies to the real skill — this is usually a
