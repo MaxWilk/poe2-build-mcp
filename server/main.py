@@ -19,6 +19,7 @@ from mcp.server.fastmcp import FastMCP
 from . import paths
 from . import scaffold
 from .compute.engine import PobEngine
+from .compute import itemopt
 from .compute import solver
 from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, to_xml
 from .knowledge import advice
@@ -139,12 +140,24 @@ def export_build() -> dict[str, Any]:
 
 
 @mcp.tool()
+def new_build() -> dict[str, Any]:
+    """Reset to a blank build — clears gear, skills, passives, and config.
+
+    Use this to start a build truly from scratch mid-session: `set_class` re-roots the tree but
+    KEEPS existing gear/skills/config, which can carry leftovers from a prior build. Call
+    `new_build` first, then `set_class` → `set_level` → … for a clean slate.
+    """
+    return get_engine().new_build()
+
+
+@mcp.tool()
 def set_class(class_name: str, ascendancy: str | None = None) -> dict[str, Any]:
-    """Set the active build's character class and (optionally) ascendancy from scratch.
+    """Set the active build's character class and (optionally) ascendancy.
 
     `class_name` is a base class (e.g. "Mercenary", "Witch", "Ranger"); `ascendancy` is one of
     its ascendancies (e.g. "Witchhunter"). This re-roots the passive tree at that class's start,
-    so subsequent passive search/allocate/optimize operate on the correct class. Returns stats.
+    so subsequent passive search/allocate/optimize operate on the correct class. It does NOT clear
+    existing gear/skills/config — call `new_build` first if you want a clean slate. Returns stats.
     """
     return get_engine().set_class(class_name, ascendancy=ascendancy)
 
@@ -373,20 +386,33 @@ def dealloc_passive(node: str | int) -> dict[str, Any]:
 
 @mcp.tool()
 def optimize_passives(
-    metric: str = "TotalDPS", points: int = 3, node_type: str = "Notable", candidates: int = 50
+    metric: str = "TotalDPS",
+    points: int = 3,
+    node_type: str = "Notable",
+    candidates: int = 50,
+    goals: dict[str, float] | None = None,
+    require: list[str | int] | None = None,
 ) -> dict[str, Any]:
-    """Greedily allocate passive points to maximize a stat on the active build.
+    """Greedily allocate passive points to maximize a goal on the active build.
 
-    Spends up to `points` points, each step allocating the reachable node (and its path) that
-    most improves `metric` (e.g. "TotalDPS", "Life", "TotalEHP"). Use `metric="balanced"` to
-    raise offense AND defense together (scores nodes by relative TotalDPS + TotalEHP gain, so it
-    won't glass-cannon) — it returns start/final DPS and EHP. Pass `points=0` to use the full
-    remaining point budget at the character's current level (slower). `node_type` defaults to
-    "Notable". Returns the chosen nodes with per-step gains. Bounded greedy search, not a
-    guaranteed global optimum.
+    Three goal modes:
+    - single `metric` (e.g. "TotalDPS", "Life", "TotalEHP") — maximizes that stat;
+    - `metric="balanced"` — raises offense AND defense (relative TotalDPS + TotalEHP);
+    - `goals={"TotalDPS":0.5,"Life":0.3,"CritChance":0.2}` — a WEIGHTED mix (relative gains, so
+      stats on different scales combine). A goal whose base is ~0 (e.g. crit on a non-crit build)
+      contributes nothing — fix the base first.
+
+    `require=[node ids/names]` allocates those nodes (+ shortest path) first, then optimizes the
+    rest. Pass `points=0` to use the full remaining budget (slower). Returns chosen nodes with
+    per-step gains and start/final per goal metric. Bounded greedy search, not a global optimum.
     """
     return get_engine().optimize_passives(
-        metric=metric, points=points, node_type=node_type, candidates=candidates
+        metric=metric,
+        points=points,
+        node_type=node_type,
+        candidates=candidates,
+        goals=goals,
+        require=require,
     )
 
 
@@ -406,6 +432,41 @@ def scaffold_gear(
     price the real versions with get_prices — and never present scaffolded gear as finished.
     """
     return scaffold.scaffold_gear(get_engine(), pool=pool, target_resist=target_resist, slots=slots)
+
+
+@mcp.tool()
+def optimize_item(
+    slot: str,
+    metric: str = "TotalDPS",
+    base: str | None = None,
+    ilvl: int = 82,
+    rolls: str = "realistic",
+    thorough: bool = False,
+    keep_resists_capped: bool = True,
+) -> dict[str, Any]:
+    """Craft the best-in-slot rare for a `slot` that maximizes `metric` (the gear min-maxer).
+
+    Searches the slot's REAL craftable affix pool (from the base's mod restrictions) and greedily
+    fills prefixes/suffixes — respecting the 3/3 limits and mod-group exclusivity — to maximize
+    `metric` (e.g. "TotalDPS" on "Weapon 1", "TotalEHP" on "Body Armour"). Every candidate is
+    engine-computed. `base` defaults to the currently-equipped base in that slot (so a wand build
+    stays a wand); pass it to try a different base. `rolls`: "realistic" (default) or "max"
+    (idealized T1). `thorough=true` adds a swap pass. Returns the crafted item (equip with
+    equip_item), the metric before/after, and a warning if it breaks a resistance cap.
+
+    The result is a *theoretical best-in-slot target* — verify attainability and price with
+    get_prices; it can't see un-modelled mechanics. Bounded greedy search, not a global optimum.
+    """
+    return itemopt.optimize_item(
+        get_engine(),
+        slot,
+        metric=metric,
+        base=base,
+        ilvl=ilvl,
+        rolls=rolls,
+        thorough=thorough,
+        keep_resists_capped=keep_resists_capped,
+    )
 
 
 def _server_version() -> str:

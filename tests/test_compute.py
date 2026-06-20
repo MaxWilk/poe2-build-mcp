@@ -175,6 +175,124 @@ def test_optimize_passives_is_deterministic(engine):
     assert first == second
 
 
+def test_eval_items_batches_and_restores(engine):
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.paste_skill("Spark 20/20  1")
+    engine.add_item("Rarity: Rare\nOrig\nDueling Wand\n20% increased Spell Damage", slot="Weapon 1")
+    base = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    cands = [
+        "Rarity: Rare\nA\nDueling Wand\n150% increased Spell Damage",
+        "Rarity: Rare\nB\nDueling Wand\n+5 to Level of all Lightning Spell Skills",
+    ]
+    res = engine.eval_items("Weapon 1", cands, keys=["TotalDPS"])["results"]
+    assert all(r and r["TotalDPS"] > 0 for r in res)
+    # build restored to the original item, not the last candidate
+    assert engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
+
+
+def test_optimize_passives_weighted_goals(engine):
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.add_item("Rarity: Rare\nW\nDueling Wand\n100% increased Spell Damage")
+    engine.paste_skill("Spark 20/20  1")
+    r = engine.optimize_passives(goals={"TotalDPS": 0.5, "Life": 0.5}, points=40)
+    assert r["metric"] == "weighted"
+    m = r["metrics"]
+    assert (
+        m["Life"]["final"] >= m["Life"]["start"] and m["TotalDPS"]["final"] > m["TotalDPS"]["start"]
+    )
+
+
+def test_optimize_passives_require_forces_node(engine):
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.paste_skill("Spark 20/20  1")
+    r = engine.optimize_passives(metric="TotalDPS", points=20, require=["Eldritch Battery"])
+    assert any(a.get("required") and a["name"] == "Eldritch Battery" for a in r["allocated"])
+    assert r.get("requiredPoints", 0) > 0
+
+
+def test_optimize_item_improves_and_is_valid(engine):
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.add_item(
+        "Rarity: Rare\nBasic\nDueling Wand\n20% increased Spell Damage", slot="Weapon 1"
+    )
+    engine.paste_skill("Spark 20/20  1\nControlled Destruction 20/20  1")  # non-crit
+    base = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    r = itemopt.optimize_item(engine, "Weapon 1", metric="TotalDPS", rolls="max", thorough=True)
+    assert r["ok"] and r["metricAfter"] > r["metricBefore"]
+    assert len(r["affixes"]) <= 6  # respects 3 prefix / 3 suffix
+    # build-aware: a non-crit lightning build's max-DPS wand uses a Lightning mod
+    assert any("Lightning" in a for a in r["affixes"])
+    # probing is restored
+    assert engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
+
+
+def test_new_build_resets(engine):
+    # new_build clears gear/skills so a from-scratch build doesn't inherit a prior one's state.
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.paste_skill("Spark 20/20  1")
+    engine.add_item("Rarity: Rare\nW\nDueling Wand\n100% increased Spell Damage", slot="Weapon 1")
+    engine.new_build()
+    b = engine.get_build()
+    assert not b.get("gear") and not b.get("mainSkill")
+
+
+def test_boss_tier_sets_enemy_resistance(engine):
+    # Setting the boss tier applies that tier's enemy elemental resistance (PoB only sets it as a
+    # GUI placeholder otherwise); harder tiers => lower computed DPS for an elemental skill.
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.add_item(
+        "Rarity: Rare\nW\nDueling Wand\n+5 to Level of all Lightning Spell Skills\n"
+        "Adds 1 to 85 Lightning Damage to Spells\n100% increased Spell Damage"
+    )
+    engine.paste_skill("Spark 20/20  1")
+    r = engine.set_config(options={"enemyIsBoss": "Boss"})
+    assert r.get("enemyResist", {}).get("lightning") == 30
+    boss = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    engine.set_config(options={"enemyIsBoss": "Pinnacle"})  # 50% res
+    pinn = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    assert pinn < boss  # a tankier tier computes lower DPS
+
+
+def test_alloc_passive_warns_over_budget(engine):
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.paste_skill("Spark 20/20  1")
+    engine.optimize_passives(metric="balanced", points=0)
+    engine.set_level(40)  # filled tree now exceeds the smaller budget
+    cand = [
+        n
+        for n in engine.search_passives(query="", node_type="Notable", limit=300)["results"]
+        if not n.get("alloc") and (n.get("pathDist") or 99) <= 2
+    ]
+    a = engine.alloc_passive(cand[0]["id"])
+    assert a.get("warning") and "over budget" in a["warning"]
+
+
+def test_unmodeled_skill_surfaced(engine):
+    # Mana Tempest's empower isn't modeled by PoB; the engine must say so (DPS understated).
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.paste_skill("Spark 20/20  1")
+    engine.add_skill_group("Mana Tempest 20/20  1")
+    r = engine.get_stats(["TotalDPS"])
+    assert r.get("engineNote") and "Mana Tempest" in r["engineNote"]
+
+
 def test_equip_bad_base_returns_error_not_crash(engine):
     # An unrecognized base must not surface a raw Lua traceback (#7).
     engine.new_build()

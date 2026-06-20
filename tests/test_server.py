@@ -27,7 +27,7 @@ def test_workflow_prompts_registered():
 
 def test_tool_surface_intact():
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 49
+    assert len(tools) == 51
 
 
 def test_meta_builds_shape():

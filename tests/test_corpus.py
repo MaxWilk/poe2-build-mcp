@@ -172,6 +172,17 @@ def test_wiki_extract_trimmed_of_empty_sections():
     assert m and "Related skills" not in m["text"]  # empty section header dropped at ingest
 
 
+def test_affix_pool_keeps_per_element_variants():
+    # The gear optimizer needs every craftable variant; per-element mods sharing a group must not
+    # collapse to one (a lightning build must be able to pick +Lightning levels, not just +Fire).
+    pool = db.affix_pool("Dueling Wand")
+    suf_text = [m["text"] for m in pool["suffixes"]]
+    assert any("Lightning Spell Skills" in t for t in suf_text)
+    assert any("Fire Spell Skills" in t for t in suf_text)
+    # real corpus mods only, with a group for exclusivity
+    assert all(m.get("group") for m in pool["prefixes"] + pool["suffixes"])
+
+
 def test_get_unique_disambiguates_base_type():
     # A base type name returns a clear message, not a confusing null (#8).
     from server.main import get_unique

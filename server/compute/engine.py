@@ -170,6 +170,12 @@ class PobEngine:
     ) -> dict[str, Any]:
         return self.call("add_item", raw=raw, slot=slot, keys=keys)
 
+    def eval_items(
+        self, slot: str, items: list[str], keys: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Batch-evaluate candidate items in a slot; returns each one's `keys` stats. Restores."""
+        return self.call("eval_items", slot=slot, items=items, keys=keys)
+
     def search_passives(
         self, query: str = "", node_type: str | None = None, limit: int = 30
     ) -> dict[str, Any]:
@@ -190,6 +196,8 @@ class PobEngine:
         points: int = 3,
         node_type: str = "Notable",
         candidates: int = 50,
+        goals: dict[str, float] | None = None,
+        require: list[str | int] | None = None,
     ) -> dict[str, Any]:
         return self.call(
             "optimize_passives",
@@ -197,6 +205,8 @@ class PobEngine:
             points=points,
             node_type=node_type,
             candidates=candidates,
+            goals=goals,
+            require=require,
         )
 
     def get_xml(self) -> str:

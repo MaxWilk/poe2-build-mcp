@@ -10,7 +10,7 @@
 
 ## Status — v1 functionally complete (2026-06)
 
-M0–M5 are implemented and verified: 49 MCP tools (compute, passives, corpus, live ops, optimize,
+M0–M5 are implemented and verified: 51 MCP tools (compute, passives, corpus, live ops, optimize,
 self-update) with a golden-build pytest suite. Self-update (from validated releases) and a
 self-contained per-OS `.mcpb` pipeline are in place; the remaining step is the first tagged CI
 release to publish the bundles + update assets. `get_meta_builds` and per-level gem stats remain

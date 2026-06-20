@@ -354,6 +354,55 @@ def get_unique(name: str) -> dict | None:
     }
 
 
+# Tags shared by almost every base — too generic to mean "this mod rolls here".
+_GENERIC_TAGS = {"default", "onehand", "twohand", "weapon", "ranged"}
+
+
+def affix_pool(base_name: str, ilvl: int = 82) -> dict[str, list[dict[str, Any]]]:
+    """Craftable prefixes/suffixes for a base — the best available tier per mod group at `ilvl`.
+
+    Used by the gear optimizer. A mod is included when its spawn tags intersect the base's
+    (non-generic) tags. Each entry has the mod group (for exclusivity), type, the range text
+    (e.g. "+(80-90) to maximum Life"), and required_level. Returns only real corpus mods.
+    """
+    base = get_item(base_name)
+    if not base:
+        return {"prefixes": [], "suffixes": []}
+    base_tags = set(base.get("tags") or []) - _GENERIC_TAGS
+    if not base_tags:
+        return {"prefixes": [], "suffixes": []}
+    con = _conn()
+    rows = con.execute(
+        "SELECT text, type, groups, ranges, tags, required_level FROM mods "
+        "WHERE domain = 'item' AND type IN ('prefix','suffix') "
+        "AND (required_level IS NULL OR required_level <= ?)",
+        (ilvl,),
+    ).fetchall()
+    best: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for r in rows:
+        mtags = set(json.loads(r["tags"] or "[]"))
+        if not (mtags & base_tags):
+            continue
+        # keep both range mods ("+(80-90) to Life") and fixed mods ("+5 to Level of all ... Skills");
+        # the latter are already a concrete roll. Skip flag/socket lines with no number at all.
+        if not re.search(r"\d", r["text"] or ""):
+            continue
+        groups = json.loads(r["groups"] or "[]")
+        group = groups[0] if groups else r["text"]
+        # Dedup by (type, group, number-stripped text): collapses tier duplicates of the SAME mod
+        # but KEEPS per-variant mods that share a group (e.g. +Fire vs +Lightning Spell Levels), so
+        # the optimizer can pick the variant matching the build. Group exclusivity still applies.
+        norm = re.sub(r"\d+", "#", r["text"] or "")
+        key = (r["type"], group, norm)
+        rl = r["required_level"] or 0
+        cur = best.get(key)
+        if cur is None or rl > cur["required_level"]:
+            best[key] = {"group": group, "type": r["type"], "text": r["text"], "required_level": rl}
+    pre = sorted((m for m in best.values() if m["type"] == "prefix"), key=lambda m: m["group"])
+    suf = sorted((m for m in best.values() if m["type"] == "suffix"), key=lambda m: m["group"])
+    return {"prefixes": pre, "suffixes": suf}
+
+
 def _has_mechanics() -> bool:
     """Mechanics table exists only in schema_version >= 4 corpora (graceful on older data)."""
     con = _conn()

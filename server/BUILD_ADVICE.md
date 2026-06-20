@@ -43,6 +43,31 @@ plainly; never present a skeleton as "done".
 
 ---
 
+## Reaching endgame DPS (orders of magnitude, not increments)
+
+Endgame content assumes very high DPS. If a build is far short, the fix is usually a **missing
+core multiplier**, not more small increases. Work in this order:
+
+1. **Identify the skill's core scaler and confirm it's actually present.** Look it up if unsure
+   (`explain_mechanic`/`lookup_mechanic`). E.g. *Archmage* adds lightning damage based on **maximum
+   mana** — so a mana pool is the whole engine; an Archmage build with a small mana pool is
+   un-built, not weak. Put the core engine in before fine-tuning gear.
+2. **Stack the defining resource hard.** For mana-stackers, the trivial multiplier is
+   **Eldritch Battery + Mind over Matter**: EB converts energy shield into mana, MoM makes mana
+   absorb damage before life — so **one stat (ES/mana) becomes both your damage and your EHP**, and
+   stacking it scales both at once (no defense trade-off). Most archetypes have an equivalent
+   "universal stat" — find it.
+3. **Layer the multipliers** — they multiply: more "+levels to skills" (often the single biggest
+   lever; verify with `rank_levers`), "more" supports, crit (needs *base* crit — "increased" crit
+   does nothing from zero, and some supports zero base crit), ailment magnitude (shock can far
+   exceed its 20% base), penetration/exposure vs the boss's resistance.
+4. **Re-verify defense after each big swing.** Resists drift and silently break caps when you
+   reshuffle gear for damage — re-check `get_defenses` every time.
+
+A useful sanity check: realistic gear should reach high six figures on a strong archetype; if the
+engine shows far less, suspect either a missing core multiplier (above) or that a mechanic isn't
+being modeled — note the latter rather than trusting the low number.
+
 ## Defense: the survival checklist
 
 Survivability is **layered**: avoidance × mitigation × hit-pool × recovery, plus ailment and

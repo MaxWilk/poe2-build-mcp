@@ -187,12 +187,39 @@ local function damageDiagnostic()
 	return nil
 end
 
+-- Skills whose effect PoB-PoE2 does not model, so their contribution is missing from the computed
+-- DPS (the real in-game number is higher). Surfaced so the figure isn't read as the whole story.
+local UNMODELED_SKILLS = {
+	["Mana Tempest"] = "Mana Tempest is in this build but the engine does NOT model its empower "
+		.. "(more damage to mana-spending spells), so the real in-game DPS is higher than shown. "
+		.. "Approximate it with a custom 'more spell damage' mod if you need an estimate.",
+}
+
+local function engineLimitationNote()
+	for _, sg in ipairs(build.skillsTab.socketGroupList or {}) do
+		for _, g in ipairs(sg.gemList or {}) do
+			local nm = g.nameSpec
+			if (not nm or nm == "") and g.gemData and g.gemData.grantedEffect then
+				nm = g.gemData.grantedEffect.name
+			end
+			if nm and UNMODELED_SKILLS[nm] then
+				return UNMODELED_SKILLS[nm]
+			end
+		end
+	end
+	return nil
+end
+
 -- Standard {mainSkill, stats} response, with a warning attached when one applies.
 local function statResult(keys)
 	local r = { mainSkill = mainSkillName(), stats = collectStats(keys) }
 	local w = damageDiagnostic()
 	if w then
 		r.warning = w
+	end
+	local el = engineLimitationNote()
+	if el then
+		r.engineNote = el
 	end
 	-- Clarify multi-projectile DPS WITHOUT implying shotgunning: PoE2 generally does NOT let
 	-- multiple projectiles from one use stack on a single target, so projectile count is clear/
@@ -387,47 +414,74 @@ function methods.get_xml()
 	return { xml = build:SaveDB("code") }
 end
 
+-- Standard PoB enemy elemental resistance per boss tier (matches PoB's GUI placeholders, which
+-- headless otherwise ignores — leaving bosses at 0% resistance, which overstates non-penetration
+-- DPS and hides the value of penetration/exposure).
+local BOSS_ELE_RES = { Boss = 30, Pinnacle = 50, Uber = 50 }
+
 -- Set combat/config options (configTab.input keys) and/or raw custom mods, then recompute.
 function methods.set_config(p)
 	p = p or {}
-	if type(p.options) == "table" then
-		for k, v in pairs(p.options) do
-			build.configTab.input[k] = v
+	local opts = (type(p.options) == "table") and p.options or {}
+	for k, v in pairs(opts) do
+		build.configTab.input[k] = v
+	end
+	-- When the caller sets the boss tier, apply that tier's standard enemy resistances so boss DPS
+	-- is realistic (PoB only sets these as GUI placeholders). Explicit enemy*Resist in the same
+	-- call wins; "None" clears them back to 0.
+	local appliedRes
+	if opts.enemyIsBoss ~= nil then
+		local ele = BOSS_ELE_RES[opts.enemyIsBoss] or 0
+		local ci = build.configTab.input
+		if opts.enemyLightningResist == nil then
+			ci.enemyLightningResist = ele
 		end
+		if opts.enemyColdResist == nil then
+			ci.enemyColdResist = ele
+		end
+		if opts.enemyFireResist == nil then
+			ci.enemyFireResist = ele
+		end
+		if opts.enemyChaosResist == nil then
+			ci.enemyChaosResist = 0
+		end
+		appliedRes = ele
 	end
 	if type(p.customMods) == "string" then
 		build.configTab.input.customMods = p.customMods
 	end
 	build.configTab:BuildModList()
 	runCallback("OnFrame")
-	return { stats = collectStats(p.keys) }
+	local r = { stats = collectStats(p.keys) }
+	if appliedRes ~= nil then
+		r.enemyResist = {
+			fire = build.configTab.input.enemyFireResist,
+			cold = build.configTab.input.enemyColdResist,
+			lightning = build.configTab.input.enemyLightningResist,
+			chaos = build.configTab.input.enemyChaosResist,
+			note = "Enemy resistances set to the "
+				.. tostring(opts.enemyIsBoss)
+				.. " tier (penetration/exposure now matter). Override via enemy*Resist.",
+		}
+	end
+	return r
 end
 
--- Equip an item from raw PoB item text, REPLACING whatever is in the target slot.
--- p.slot optionally forces a slot (e.g. "Ring 2", "Weapon 2"); otherwise the item's primary slot.
-function methods.add_item(p)
-	assert(p and p.raw, "add_item requires params.raw")
+-- Parse raw PoB item text and place it in a slot (REPLACING what's there). Returns ok, slotOrErr.
+-- PoB's parser throws (e.g. "attempt to index local 'item'") on an unrecognized base/malformed
+-- block; we pcall it so callers get a message, not a raw traceback.
+local function equipItemRaw(raw, slot)
 	local items = build.itemsTab.items
 	local before = {}
 	for id in pairs(items) do
 		before[id] = true
 	end
-	-- PoB's parser throws (e.g. "attempt to index local 'item'") on an unrecognized base type or a
-	-- malformed block; catch it so the tool returns a helpful message instead of a raw traceback.
 	local ok, err = pcall(function()
-		build.itemsTab:CreateDisplayItemFromRaw(p.raw)
+		build.itemsTab:CreateDisplayItemFromRaw(raw)
 		build.itemsTab:AddDisplayItem(true) -- add without auto-equip; we place it explicitly
 	end)
 	if not ok then
-		return {
-			ok = false,
-			error = "could not parse item — check the BASE TYPE is a real PoE2 base on its own "
-				.. "line directly under the name, and the block is well-formed (Rarity / name / "
-				.. "base, then mods). For attack weapons this matters: an unbound base has no "
-				.. "attack rate and breaks DPS. (PoB: "
-				.. tostring(err)
-				.. ")",
-		}
+		return false, "parse error: " .. tostring(err)
 	end
 	local newItem
 	for id, it in pairs(items) do
@@ -437,22 +491,58 @@ function methods.add_item(p)
 		end
 	end
 	if not newItem then
-		return {
-			ok = false,
-			error = "item not created — the base type is probably unrecognized. Use search_items "
-				.. "to find a valid base name and put it on its own line under the item name.",
-		}
+		return false, "item not created (unrecognized base type?)"
 	end
-	local slot = p.slot or newItem:GetPrimarySlot()
-	local slotControl = build.itemsTab.slots[slot]
-	if not slotControl then
-		return { ok = false, error = "unknown slot: " .. tostring(slot) }
+	local sl = slot or newItem:GetPrimarySlot()
+	local sc = build.itemsTab.slots[sl]
+	if not sc then
+		return false, "unknown slot: " .. tostring(sl)
 	end
-	slotControl:SetSelItemId(newItem.id) -- replaces any existing item in the slot
+	sc:SetSelItemId(newItem.id) -- replaces any existing item in the slot
 	build.buildFlag = true
 	build.modFlag = true
+	return true, sl
+end
+
+-- Equip an item from raw PoB item text, REPLACING whatever is in the target slot.
+-- p.slot optionally forces a slot (e.g. "Ring 2", "Weapon 2"); otherwise the item's primary slot.
+function methods.add_item(p)
+	assert(p and p.raw, "add_item requires params.raw")
+	local ok, slotOrErr = equipItemRaw(p.raw, p.slot)
+	if not ok then
+		return {
+			ok = false,
+			error = "could not equip — check the BASE TYPE is a real PoE2 base on its own line "
+				.. "directly under the name, and the block is well-formed (Rarity / name / base, "
+				.. "then mods). For attack weapons an unbound base has no attack rate and breaks "
+				.. "DPS. ("
+				.. slotOrErr
+				.. ")",
+		}
+	end
 	runCallback("OnFrame")
-	return { ok = true, slot = slot, stats = collectStats(p.keys) }
+	return { ok = true, slot = slotOrErr, stats = collectStats(p.keys) }
+end
+
+-- Batch-evaluate many candidate items in one slot, returning each one's requested stats. Used by
+-- the gear optimizer to score crafted candidates in a single round-trip. Restores the build after.
+function methods.eval_items(p)
+	assert(p and p.slot and type(p.items) == "table", "eval_items requires slot + items[]")
+	local keys = p.keys or { "TotalDPS" }
+	local snapshot = build:SaveDB("code")
+	local out = {}
+	for i, raw in ipairs(p.items) do
+		local ok = equipItemRaw(raw, p.slot)
+		if ok then
+			runCallback("OnFrame")
+			out[i] = collectStats(keys)
+		else
+			out[i] = false -- candidate failed to parse/equip
+		end
+	end
+	loadBuildFromXML(snapshot)
+	runCallback("OnFrame")
+	return { results = out }
 end
 
 -- Clear an equipment slot (e.g. "Ring 2", "Body Armour").
@@ -742,12 +832,27 @@ function methods.alloc_passive(p)
 	build.buildFlag = true
 	runCallback("OnFrame")
 	local usedAfter = build.spec:CountAllocNodes()
-	return {
+	local r = {
 		ok = true,
 		node = nodeSummary(n),
 		pointsSpent = usedAfter - used,
 		statsDelta = statDelta(before),
 	}
+	-- Warn if this pushed the tree past the level's point budget (the build is now invalid until
+	-- you free points or level up) — otherwise over-allocation is silent.
+	local avail = availablePoints()
+	if usedAfter > avail then
+		r.warning = "Tree is over budget: "
+			.. usedAfter
+			.. " points allocated but only "
+			.. avail
+			.. " available at level "
+			.. (build.characterLevel or 0)
+			.. ". Free "
+			.. (usedAfter - avail)
+			.. " (dealloc_passive) or raise the level before exporting."
+	end
+	return r
 end
 
 function methods.dealloc_passive(p)
@@ -769,34 +874,83 @@ function methods.dealloc_passive(p)
 end
 
 -- Greedy passive optimizer: repeatedly allocate the reachable node (+ its path) that most
--- improves `metric`, using PoB's what-if calculator to score candidates without committing.
+-- improves the goal, using PoB's what-if calculator to score candidates without committing.
+-- Supports a single `metric` (absolute gain), `goals` = {metric=weight} (weighted *relative*
+-- gain — generalizes the "balanced" DPS+EHP mode), and `require` = nodes to allocate first.
 function methods.optimize_passives(p)
 	p = p or {}
 	local metric = p.metric or "TotalDPS"
-	-- "balanced" (alias "DPS+EHP") scores each candidate by its *relative* TotalDPS + TotalEHP
-	-- improvement, so a single pass raises both offense and defense instead of glass-cannoning.
 	local balanced = (metric == "balanced" or metric == "DPS+EHP")
-	-- points <= 0 means "use the remaining budget at this level" (level-aware optimize).
+	-- weighted goals: explicit p.goals, else balanced => equal-weight DPS+EHP, else single-metric.
+	local goals = (type(p.goals) == "table") and p.goals or nil
+	if not goals and balanced then
+		goals = { TotalDPS = 1, TotalEHP = 1 }
+	end
 	local budget = p.points
 	if not budget or budget <= 0 then
 		budget = math.max(0, availablePoints() - build.spec:CountAllocNodes())
 	end
 	local cap = p.candidates or 50
 	local spec = build.spec
-	local mo0 = build.calcsTab.mainOutput
-	local startDPS, startEHP = (mo0.TotalDPS) or 0, (mo0.TotalEHP) or 0
-	local startValue = balanced and 0 or ((mo0[metric]) or 0)
 	local chosen = {}
 
-	-- One greedy pass over a single node type; allocates the reachable node (+ its path) that most
-	-- improves `metric` until nothing helps or the budget runs out. Returns points spent.
+	-- metrics we will report start/final for
+	local mo0 = build.calcsTab.mainOutput
+	local reportKeys = {}
+	if goals then
+		for m in pairs(goals) do
+			reportKeys[#reportKeys + 1] = m
+		end
+	else
+		reportKeys[1] = metric
+	end
+	local startVals = {}
+	for _, m in ipairs(reportKeys) do
+		startVals[m] = (mo0[m]) or 0
+	end
+
+	-- `require`: allocate the named nodes (+ shortest path) before optimizing, so they're included.
+	local requiredSpent = 0
+	if type(p.require) == "table" then
+		for _, ref in ipairs(p.require) do
+			local n = findNode(ref)
+			if n and not n.alloc and n.path then
+				local u0 = spec:CountAllocNodes()
+				spec:AllocNode(n, nil)
+				build.buildFlag = true
+				runCallback("OnFrame")
+				local spent = spec:CountAllocNodes() - u0
+				requiredSpent = requiredSpent + spent
+				chosen[#chosen + 1] = { name = n.name, id = n.id, cost = spent, required = true }
+			end
+		end
+		budget = math.max(0, budget - requiredSpent)
+	end
+
+	-- weighted relative gain across goals (so DPS in thousands and CritChance 0-100 combine), or
+	-- plain absolute gain for a single metric.
+	local function scoreGain(calcBase, out)
+		if goals then
+			local g = 0
+			for m, w in pairs(goals) do
+				local b = (calcBase[m]) or 0
+				local v = (out[m]) or 0
+				if b > 0 then
+					g = g + w * (v - b) / b
+				else
+					g = g + w * (v - b) * 1e-4 -- base 0 (e.g. crit on a non-crit build): tiny nudge
+				end
+			end
+			return g
+		end
+		return ((out[metric]) or 0) - ((calcBase[metric]) or 0)
+	end
+
+	-- One greedy pass over a single node type until nothing helps or the budget runs out.
 	local function greedyPass(nodeType, budgetLeft)
 		local spent = 0
 		while budgetLeft > 0 do
 			local calcFunc, calcBase = build.calcsTab:GetMiscCalculator(build)
-			local baseVal = (calcBase[metric]) or 0
-			local baseDPS, baseEHP = (calcBase.TotalDPS) or 0, (calcBase.TotalEHP) or 0
-
 			local cands = {}
 			for _, node in pairs(spec.nodes) do
 				if
@@ -827,15 +981,7 @@ function methods.optimize_passives(p)
 					pathNodes[pn] = true
 				end
 				pathNodes[node] = true
-				local out = calcFunc({ addNodes = pathNodes })
-				local gain
-				if balanced then
-					local dD = baseDPS > 0 and (((out.TotalDPS or 0) - baseDPS) / baseDPS) or 0
-					local dE = baseEHP > 0 and (((out.TotalEHP or 0) - baseEHP) / baseEHP) or 0
-					gain = dD + dE
-				else
-					gain = ((out[metric]) or 0) - baseVal
-				end
+				local gain = scoreGain(calcBase, calcFunc({ addNodes = pathNodes }))
 				if gain > 0 and (not best or gain > bestGain) then
 					best, bestGain, bestCost = node, gain, node.pathDist
 				end
@@ -858,42 +1004,44 @@ function methods.optimize_passives(p)
 	local nodeType = p.node_type or "Notable"
 	local used = greedyPass(nodeType, budget)
 	budget = budget - used
-	-- If we were filling the default (Notables), spend any leftover budget on small (Normal) nodes
-	-- too, so the tree isn't left point-starved — the common cause of "missing points" in exports.
+	-- If filling the default (Notables), spend leftover budget on small (Normal) nodes too, so the
+	-- tree isn't left point-starved — the common cause of "missing points" in exports.
 	local smallUsed = 0
 	if budget > 0 and nodeType == "Notable" then
 		smallUsed = greedyPass("Normal", budget)
 		used = used + smallUsed
 		budget = budget - smallUsed
 	end
+	used = used + requiredSpent
 
 	local mo1 = build.calcsTab.mainOutput
 	local result = {
-		metric = metric,
+		metric = p.goals and "weighted" or metric,
 		pointsUsed = used,
 		pointsRemaining = math.max(0, budget),
 		smallNodePoints = smallUsed,
+		requiredPoints = requiredSpent,
 		allocated = chosen,
 	}
-	-- Greedy stops when no remaining node improves the metric; flag a meaningful leftover (a few
-	-- stranded points that no node can usefully use aren't worth nagging about).
 	if budget > 5 then
-		local alt = balanced and "a single stat (e.g. 'TotalDPS' or 'Life')" or "'balanced'"
 		result.note = budget
-			.. " points still unspent — no remaining notable or small node improved "
-			.. metric
-			.. " from here. Try optimizing for "
-			.. alt
-			.. ", a different node_type, or alloc_passive toward a specific cluster; otherwise "
-			.. "they're parked for later gear/scaling (say so rather than leaving it implicit)."
+			.. " points still unspent — no remaining notable or small node improved the goal from "
+			.. "here. Try different goals/weights, a different node_type, or alloc_passive toward a "
+			.. "specific cluster; otherwise they're parked for later gear/scaling (say so)."
 	end
-	if balanced then
-		-- single-metric value is meaningless here; report the DPS/EHP pair instead.
-		result.startDPS, result.finalDPS = startDPS, (mo1.TotalDPS) or startDPS
-		result.startEHP, result.finalEHP = startEHP, (mo1.TotalEHP) or startEHP
-	else
-		result.startValue = startValue
-		result.finalValue = (mo1[metric]) or startValue
+	-- start/final for every reported metric
+	local metricsOut = {}
+	for _, m in ipairs(reportKeys) do
+		metricsOut[m] = { start = startVals[m], final = (mo1[m]) or startVals[m] }
+	end
+	result.metrics = metricsOut
+	-- back-compat fields
+	if goals and goals.TotalDPS and goals.TotalEHP then
+		result.startDPS, result.finalDPS = startVals.TotalDPS, (mo1.TotalDPS) or startVals.TotalDPS
+		result.startEHP, result.finalEHP = startVals.TotalEHP, (mo1.TotalEHP) or startVals.TotalEHP
+	elseif not goals then
+		result.startValue = startVals[metric]
+		result.finalValue = (mo1[metric]) or startVals[metric]
 	end
 	return result
 end
