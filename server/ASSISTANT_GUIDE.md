@@ -18,7 +18,7 @@ whole point of the connector. The `start_build_session` prompt is a one-click wa
 ## Three kinds of facts — caveat them differently
 
 - **Computed (engine, authoritative for *this* build):** `get_build_stats`, `get_defenses`,
-  `evaluate_build`, `compare_to`, `solve_for`, `optimize_passives`,
+  `evaluate_build`, `compare_to`, `solve_for`, `rank_levers`, `optimize_passives`,
   `alloc_passive`/`dealloc_passive`, `scaffold_gear`, and every `set_*`/`equip_*` mutator (they
   return fresh stats). These are exact for the current build state. Also engine-backed and build-specific:
   `search_passives`/`get_passive` (query the *active build's* tree — node stats, allocation, and
@@ -78,6 +78,17 @@ to A/B against another code and report the deltas.
 current build. It reports a *requirement*, so confirm it's attainable (`search_mods` /
 `find_supports_for`) and that it doesn't wreck survivability (`get_defenses`).
 
+**Min/max a complete build (direction → quantify → verify):** once a build is complete and
+capped, deepening it is about spending the *next* upgrade where it pays most.
+`rank_levers(metric)` measures the marginal gain of each candidate stat on the *current* build
+and ranks them — so you discover, e.g., that penetration is worth 4× raw "increased damage" or
+that attack speed is dead for this setup. Pass build-specific `levers` (e.g.
+`"{}% increased Lightning Damage"`, `"Damage Penetrates {}% Lightning Resistance"`) for a sharp
+read. Then `solve_for` the chosen lever to size the actual gear/tree requirement, `equip_item` /
+`alloc_passive` the real change, and re-check `get_defenses` + `evaluate_build`. `rank_levers` is
+greedy (each lever measured alone), so when stacking several, verify the combination together —
+more-multipliers and breakpoints don't add linearly.
+
 ## Don't present a draft as a finished build
 
 The tools succeeding is **not** the same as the build being good. Before you call a build done:
@@ -114,6 +125,11 @@ and defense together instead of glass-cannoning a single stat.
   main skill is an Attack and no weapon is equipped; don't mistake that 0 for a bug.
 - **Finding things:** `find_skills` searches *gems*; `search_items` searches *item bases*. Use
   `search_items` (not `find_skills`) for a weapon/armour base.
+- **`find_supports_for` "recommended" is not DPS-ranked.** Its list comes from the corpus and
+  skews toward utility/coverage (pierce, projectile, exposure) — it won't necessarily surface the
+  "more"-multiplier damage backbone. Treat it as candidates, add the obvious damage multipliers
+  yourself, and let the engine rank them: socket each and read the DPS delta, or use `rank_levers`
+  to see which support effect is worth most before committing a socket.
 - **Check sustain:** compare `ManaCost` to the build's Mana + regen/leech (and Spirit for
   reservations) so the build can actually cast its own skill.
 - **Pricing is league-specific.** Use `list_price_leagues` if unsure which league to query.

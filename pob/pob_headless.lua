@@ -701,14 +701,16 @@ function methods.optimize_passives(p)
 	local mo1 = build.calcsTab.mainOutput
 	local result = {
 		metric = metric,
-		startValue = startValue,
-		finalValue = balanced and 0 or ((mo1[metric]) or startValue),
 		pointsUsed = used,
 		allocated = chosen,
 	}
 	if balanced then
+		-- single-metric value is meaningless here; report the DPS/EHP pair instead.
 		result.startDPS, result.finalDPS = startDPS, (mo1.TotalDPS) or startDPS
 		result.startEHP, result.finalEHP = startEHP, (mo1.TotalEHP) or startEHP
+	else
+		result.startValue = startValue
+		result.finalValue = (mo1[metric]) or startValue
 	end
 	return result
 end

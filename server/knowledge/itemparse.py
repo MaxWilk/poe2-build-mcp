@@ -34,11 +34,11 @@ _AFFIX_LIMITS = {"normal": (0, 0), "magic": (1, 1), "rare": (3, 3)}
 _NON_AFFIX = {"implicit", "enchant", "rune"}
 
 
-# RePoE's PoE2 mod text is templated and drifts from in-game wording: single-element resists
-# are stored generically as "to Resistances", and some lines differ in case/plural. Bridge the
-# common high-value cases so the in-game text matches the corpus template (applied to both sides).
+# RePoE's PoE2 mod text is templated and can drift from in-game wording in case/plural. Bridge
+# the common high-value cases so the in-game text matches the corpus template (applied to both
+# sides). (Single-element resists used to be stored generically; the corpus now keeps them
+# per-element — "+#% to Fire Resistance" — so no resist alias is needed.)
 _ALIASES = [
-    (re.compile(r"\bto (?:fire|cold|lightning) resistance\b"), "to resistances"),
     (re.compile(r"\bto attacks\b"), "to attack"),
 ]
 

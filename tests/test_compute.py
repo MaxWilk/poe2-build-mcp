@@ -93,6 +93,21 @@ def test_solve_for_reaches_target(fireball):
     assert fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
 
 
+def test_rank_levers_marginal_gain(fireball):
+    from server.compute import solver
+
+    base = fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    r = solver.rank_levers(fireball, metric="TotalDPS", unit=10)
+    assert r["ok"] and r["levers"]
+    gains = [lv["gain"] for lv in r["levers"]]
+    assert gains == sorted(gains, reverse=True)  # ranked high -> low
+    by = {lv["lever"]: lv["gain"] for lv in r["levers"]}
+    # a damage lever helps DPS more than a pure-life lever
+    assert by["{}% increased Damage"] > by["+{} to maximum Life"]
+    # probing is restored
+    assert fireball.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
+
+
 def test_solve_for_already_met(fireball):
     from server.compute import solver
 

@@ -62,7 +62,9 @@ def _seg(metadata_id: str) -> str:
     return metadata_id.rsplit("/", 1)[-1]
 
 
-LINK_RE = re.compile(r"\[([^\]|]+)(?:\|[^\]]+)?\]")
+# PoE markup is [reference|display]; keep the *display* (post-pipe) text, or the lone term.
+# (Keeping the reference side turned "[EnergyShield|Energy Shield]" into "EnergyShield".)
+LINK_RE = re.compile(r"\[(?:[^\]|]*\|)?([^\]]+)\]")
 CURLY_RE = re.compile(r"\{[^}]*\}")
 BLOCK_RE = re.compile(r"\[\[(.*?)\]\]", re.DOTALL)
 # PoB metadata lines inside a unique block that aren't readable mods (drop from the text).
@@ -146,8 +148,9 @@ def build() -> dict[str, int]:
         name = it.get("name") or _seg(mid)
         item_class = it.get("item_class", "") or ""
         tags = it.get("tags") or []
-        # drop unobtainable/special bases (demigod uniques, unreleased) that only add search noise
-        if "demigods" in tags or it.get("release_state") == "unreleased":
+        # drop noise bases: demigod/unreleased, and unique-only base types ("...Unique..." ids)
+        # that duplicate the normal base in searches.
+        if "demigods" in tags or it.get("release_state") == "unreleased" or "Unique" in mid:
             continue
         cur.execute(
             "INSERT INTO items(id,name,item_class,drop_level,tags,raw) VALUES(?,?,?,?,?,?)",
@@ -162,8 +165,13 @@ def build() -> dict[str, int]:
     n_gems = 0
     for mid, g in skill_gems.items():
         name = g["base_item"]["display_name"]
-        # skip dev/placeholder gems ("[DNT...]") and unreleased ones
-        if name.upper().startswith("[DNT") or g["base_item"].get("release_state") == "unreleased":
+        # skip dev/placeholder ("[DNT...]"), unreleased, and unique-item-granted ("...Unique...")
+        # skills — none are normal socketable gems, they just duplicate names in search.
+        if (
+            name.upper().startswith("[DNT")
+            or g["base_item"].get("release_state") == "unreleased"
+            or "Unique" in mid
+        ):
             continue
         tags = g.get("tags") or []
         grants = g.get("grants_skills") or []

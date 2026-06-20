@@ -144,3 +144,70 @@ def solve_for(
         }
     finally:
         engine.load_build_xml(snapshot)
+
+
+# Broad default candidate levers for the marginal scan (custom-mod templates, "{}" = magnitude).
+# Damage + defence; irrelevant ones simply rank ~0 for a given metric.
+_DEFAULT_LEVERS = [
+    "{}% increased Damage",
+    "{}% increased Attack Speed",
+    "{}% increased Cast Speed",
+    "{}% increased Critical Strike Chance",
+    "{}% increased Critical Damage Bonus",
+    "Damage Penetrates {}% Elemental Resistances",
+    "+{} to maximum Life",
+    "+{} to maximum Energy Shield",
+]
+
+
+def rank_levers(
+    engine: PobEngine,
+    metric: str = "TotalDPS",
+    unit: float = 10.0,
+    levers: list[str] | None = None,
+) -> dict[str, Any]:
+    """Rank candidate stat levers by their marginal gain to `metric` on the current build.
+
+    The min/max direction-finder: applies each lever at `unit` and measures the real delta, so
+    you can see where investment pays off most. Levers are measured independently (greedy).
+    """
+    templates = levers or _DEFAULT_LEVERS
+    build = engine.get_build()
+    base_mods = (build.get("customMods") or "") if isinstance(build, dict) else ""
+    snapshot = engine.get_xml()
+    try:
+        base = engine.get_stats([metric])["stats"].get(metric)
+        if not isinstance(base, (int, float)):
+            return {"ok": False, "error": f"metric '{metric}' is not available on this build"}
+        base = float(base)
+        out: list[dict[str, Any]] = []
+        for raw in templates:
+            template = _template_for(raw)
+            mod = template.format(_fmt(unit))
+            combined = f"{base_mods}\n{mod}".strip() if base_mods else mod
+            v = engine.set_config(custom_mods=combined, keys=[metric])["stats"].get(metric)
+            if isinstance(v, (int, float)):
+                gain = float(v) - base
+                out.append(
+                    {
+                        "lever": template,
+                        "gain": round(gain, 2),
+                        "gainPerUnit": round(gain / unit, 4),
+                    }
+                )
+        out.sort(key=lambda r: r["gain"], reverse=True)
+        return {
+            "ok": True,
+            "metric": metric,
+            "unit": unit,
+            "baseline": round(base, 2),
+            "levers": out,
+            "note": (
+                "Marginal gain of each lever at the stated unit on the CURRENT build — a greedy "
+                "'where to invest' guide. Levers are measured independently, so verify combined "
+                "picks (more-multiplier stacking, breakpoints) together. Pass your build's "
+                "specific levers (e.g. '{}% increased Lightning Damage') for sharper results."
+            ),
+        }
+    finally:
+        engine.load_build_xml(snapshot)

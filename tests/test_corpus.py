@@ -14,7 +14,8 @@ pytestmark = pytest.mark.skipif(
 
 def test_counts():
     counts = db.corpus_info()["counts"]
-    assert counts["items"] > 5000
+    # items dropped from ~5200 after filtering unique-only base types out of the base-item search
+    assert counts["items"] > 4500
     assert counts["gems"] > 1000
     assert counts["mods"] > 5000
     assert counts["uniques"] > 300
@@ -107,6 +108,23 @@ def test_parse_item_tiers_and_open_slots():
     # rare = 3 prefix / 3 suffix; 1 prefix + 1 suffix used -> 2 / 2 open
     assert r["prefixes"] == 1 and r["suffixes"] == 1
     assert r["openPrefixes"] == 2 and r["openSuffixes"] == 2
+
+
+def test_parse_item_recognizes_energy_shield():
+    # Regression: the corpus stored "...maximum EnergyShield" (markup reference, one word) so ES
+    # affixes landed in `unrecognized`. The LINK_RE display-side fix restores "Energy Shield".
+    from server.knowledge import itemparse as ip
+
+    c = ip.classify_affix("+90 to maximum Energy Shield")
+    assert c is not None and c["type"] == "prefix"  # recognized (was landing in `unrecognized`)
+    item = (
+        "Item Class: Body Armours\nRarity: Rare\nTest Hexshield\nVaal Carapace\n"
+        "--------\nItem Level: 81\n--------\n+90 to maximum Energy Shield\n+35% to Fire Resistance"
+    )
+    r = ip.parse_item(item)
+    by = {a["text"]: a for a in r["affixes"]}
+    assert by["+90 to maximum Energy Shield"]["type"] == "prefix"
+    assert r["prefixes"] == 1  # ES counts as a real prefix, not unrecognized
 
 
 def test_search_mods_precision():

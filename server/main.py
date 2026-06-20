@@ -286,6 +286,24 @@ def solve_for(metric: str, target: float, lever: str, tolerance: float = 0.01) -
 
 
 @mcp.tool()
+def rank_levers(
+    metric: str = "TotalDPS", unit: float = 10.0, levers: list[str] | None = None
+) -> dict[str, Any]:
+    """Rank which stat levers give the most `metric` per unit on the active build — the min/max
+    direction-finder ("where do I invest next?").
+
+    Applies each lever at `unit` (default 10 = "10%" or "+10") and measures the real Δmetric,
+    ranked high→low — so you can see, e.g., that lightning penetration beats increased lightning
+    damage for this build. Defaults to a broad damage+defense set; pass build-specific `levers`
+    (custom-mod templates containing "{}", e.g. "{}% increased Lightning Damage", "Damage
+    Penetrates {}% Lightning Resistance") for sharper guidance. Greedy/marginal — levers are
+    measured independently, so verify combined picks (more-multiplier stacking, breakpoints)
+    together. Every value is engine-computed; use it to direct gear/tree/support choices.
+    """
+    return solver.rank_levers(get_engine(), metric=metric, unit=unit, levers=levers)
+
+
+@mcp.tool()
 def search_passives(
     query: str = "", node_type: str | None = None, limit: int = 30
 ) -> dict[str, Any]:

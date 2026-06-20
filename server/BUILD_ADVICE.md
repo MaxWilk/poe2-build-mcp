@@ -13,6 +13,13 @@ engine (`get_build_stats` / `get_defenses`), and keep it only if it improves the
 Optimization is finding the build's *weakest layer* and spending the cheapest points/currency to
 raise it — not maximizing the number that's already highest.
 
+**Min/maxing a complete build** is the same loop pointed at marginal gain: once defense is
+complete and resists are capped, find where the *next* point/currency pays most rather than
+guessing. `rank_levers` measures each candidate stat's real Δ on the current build and ranks
+them, so you spend on the lever that actually moves the number (often penetration or attack/cast
+speed over raw "increased" damage). Confirm the magnitude with `solve_for`, apply the real gear/
+tree change, then re-verify defense — a min/maxed build never trades back below the "done" bar.
+
 ## What "done" looks like — targets, not vibes
 
 A build is a **draft** until it clears this bar. Don't present one as finished until it does
