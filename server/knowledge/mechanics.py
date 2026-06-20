@@ -147,6 +147,11 @@ def relevant(
         if not hits or hits[0]["id"] in seen:
             return
         h = hits[0]
+        # relevance guard: the query's key word must appear in the matched page title, so a tag
+        # without a dedicated page (e.g. "lightning"→"Damage conversion") doesn't surface noise.
+        key = term.split()[0].lower()
+        if key and key not in h["title"].lower():
+            return
         seen.add(h["id"])
         out.append({"topic": term, "title": h["title"], "url": h["url"], "why": why})
 
@@ -155,7 +160,9 @@ def relevant(
         if tl in _SKIP_TAGS:
             continue
         if tl in _TAG_AILMENT:
+            # damage-type tags have no dedicated page — surface the ailment they build, not the raw element
             add(_TAG_AILMENT[tl], f"{skill or 'skill'} is {tl} → its ailment")
+            continue
         add(tl, f"{skill or 'skill'} tag: {tl}")
     for k in keystones or []:
         add(k, f"keystone: {k}")

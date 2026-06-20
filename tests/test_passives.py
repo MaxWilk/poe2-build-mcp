@@ -171,6 +171,23 @@ def test_scaffold_gear_caps_resists_gap_driven(engine):
     )
 
 
+def test_scaffold_gear_es_default_for_int_class(engine):
+    from server import scaffold
+
+    # an intelligence class (Sorceress) auto-defaults to Energy Shield, not Life (#9)
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.paste_skill("Spark 20/0  1")
+    r = scaffold.scaffold_gear(engine)
+    assert r["pool"] == "energy_shield"
+    assert (r["energyShieldAfter"] or 0) > 0
+    # chaos resistance isn't scaffolded -> surfaced + flagged in the note (#9)
+    assert "chaosResAfter" in r
+    if (r["chaosResAfter"] or 0) <= 0:
+        assert "Chaos resistance" in r["note"]
+
+
 def test_engine_reports_tree_version(engine):
     # the ready frame surfaces the passive-tree data version (used by engine_health)
     assert engine.info.get("treeVersion")

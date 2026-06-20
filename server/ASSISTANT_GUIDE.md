@@ -65,9 +65,11 @@ candidate improvements → **validate every proposed change on the engine** (mut
 or `compare_to`) before recommending it.
 
 **Build from a goal (create → validate → cost → present):**
-`set_class` → `set_level` → `set_skill` (use `find_supports_for` to pick supports) →
-`optimize_passives` / `alloc_passive` for the tree → `equip_item` for gear →
-`get_defenses` + `evaluate_build(goals)` to confirm it actually meets the goal →
+`set_class` → `set_level` → `set_skill` (use `find_supports_for` to pick supports, then add the
+"more"-multiplier damage supports yourself) → **`add_skill_group` for auras/heralds/Archmage**
+(the persistent buffs that carry endgame damage — they apply without replacing the main skill;
+mind Spirit reservation) → `optimize_passives` / `alloc_passive` for the tree → `equip_item` for
+gear → `get_defenses` + `evaluate_build(goals)` to confirm it actually meets the goal →
 `get_prices` to sanity-check affordability → present, with `export_build` for the code.
 **A build that fails `evaluate_build` is flagged, not recommended.**
 
@@ -125,6 +127,14 @@ and defense together instead of glass-cannoning a single stat.
   just equip the new item.
 - **Stat keys are PoB-internal** (`TotalDPS`, `EnergyShield`, `Life`, `TotalEHP`, `Speed`, …).
   Pass them to `get_build_stats`/`get_defenses` when you need specific values.
+- **`TotalDPS` is per-projectile/per-hit.** For multi-projectile skills (Spark, etc.) the response
+  carries `ProjectileCount` and a `dpsNote` — a single target can be struck by several projectiles,
+  so effective DPS is a multiple of `TotalDPS` (more on packs, fewer on a lone boss). Don't quote
+  `TotalDPS` as the whole story for these; say it's per-projectile and that real DPS is higher.
+- **Auras/Archmage need `add_skill_group`, not `set_skill`.** `set_skill` sets the *main* skill;
+  a persistent buff added with it would just become the main skill (and read ~0 DPS). Add Wrath/
+  Herald/Archmage with `add_skill_group` so the buff applies to the real skill — this is usually a
+  large chunk of a caster's endgame damage. After stacking auras, re-check Spirit reservation fits.
 - **A ~0-DPS result is often *uncomputable*, not a bug — read the `warning`.** `set_skill`/
   `get_build_stats` attach a `warning` when DPS is ~0 for a knowable reason: an Attack with no
   weapon (equip Weapon 1 first), a **buff/reservation** skill that isn't a hit (e.g. Plague

@@ -144,6 +144,9 @@ class PobEngine:
     def paste_skill(self, text: str) -> dict[str, Any]:
         return self.call("paste_skill", text=text)
 
+    def add_skill_group(self, text: str) -> dict[str, Any]:
+        return self.call("add_skill_group", text=text)
+
     def get_stats(self, keys: list[str] | None = None) -> dict[str, Any]:
         return self.call("get_stats", keys=keys)
 

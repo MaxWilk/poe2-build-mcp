@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Your AI build companion for Path of Exile 2. Import a build for real Path of Building numbers, theorycraft and optimize upgrades, search items, gems, and uniques, and check live prices — every stat computed by the engine, never guessed.",
   "icon": "assets/icon.png",
   "author": {
@@ -33,6 +33,7 @@
     { "name": "import_build", "description": "Import a build from a PoB code, pobb.in/pastebin link, or XML." },
     { "name": "get_build_stats", "description": "PoB-computed stats for the active build." },
     { "name": "set_skill", "description": "Set the active build's main skill." },
+    { "name": "add_skill_group", "description": "Add an enabled aura/herald/buff (e.g. Archmage) without changing the main skill." },
     { "name": "set_class", "description": "Set character class + ascendancy from scratch." },
     { "name": "set_level", "description": "Set character level (1-100)." },
     { "name": "set_config", "description": "Set combat config and/or extra modifiers." },

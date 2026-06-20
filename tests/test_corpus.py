@@ -153,13 +153,23 @@ def test_mechanics_tier_search_and_explain():
 def test_relevant_mechanics_maps_build_signals():
     from server.knowledge import mechanics
 
-    rel = mechanics.relevant(skill="Spark", tags=["lightning", "spell", "projectile"])
+    rel = mechanics.relevant(skill="Spark", tags=["lightning", "spell", "projectile", "duration"])
     titles = {r["title"] for r in rel}
     assert "Shock" in titles  # lightning -> its ailment
+    assert "Spell" in titles and "Projectile" in titles
     assert any(r["topic"] == "resistance" for r in rel)  # universal staple
+    # relevance guard: tags without a dedicated page must not surface noisy fuzzy matches (#8)
+    assert "Damage conversion" not in titles  # was matched by the raw "lightning" tag
+    assert "Exposure" not in titles  # was matched by "duration"
     # attribute tags are filtered out as non-mechanics
     rel2 = mechanics.relevant(skill="X", tags=["intelligence", "strength"])
     assert all(r["topic"] not in ("intelligence", "strength") for r in rel2)
+
+
+def test_wiki_extract_trimmed_of_empty_sections():
+    # Full-page wiki extracts must not carry hollow template section headers (#7).
+    m = db.get_mechanic("shock")
+    assert m and "Related skills" not in m["text"]  # empty section header dropped at ingest
 
 
 def test_search_mods_precision():

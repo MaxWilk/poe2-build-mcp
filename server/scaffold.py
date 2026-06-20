@@ -31,6 +31,8 @@ _SLOT_CLASS = {
 _RES_PER_MOD = 35  # a realistic high single-element resistance roll
 _POOL_TEXT = {"life": "maximum Life", "energy_shield": "maximum Energy Shield"}
 _POOL_AMT = {"life": 90, "energy_shield": 80}
+# Intelligence classes default to Energy Shield (their natural layer) when nothing else signals.
+_INT_CLASSES = {"Sorceress", "Witch"}
 
 
 def _base_for(item_class: str) -> str | None:
@@ -56,10 +58,17 @@ def scaffold_gear(
     res = before.get("resistances") or {}
     gaps = {el: max(0, target_resist - (res.get(el) or 0)) for el in ("fire", "cold", "lightning")}
 
-    # Pool: auto -> Energy Shield for an ES/CI build, else Life. "none" adds no pool.
+    # Pool: auto -> Energy Shield for an ES/CI build or an intelligence class (Sorceress/Witch,
+    # where ES is the natural layer), else Life. "none" adds no pool.
     if pool == "auto":
         life, es = before.get("life") or 0, before.get("energyShield") or 0
-        pool = "energy_shield" if (es > life or life <= 1) else "life"
+        cls = build.get("class") or ""
+        if es > life or life <= 1:
+            pool = "energy_shield"
+        elif cls in _INT_CLASSES:
+            pool = "energy_shield"
+        else:
+            pool = "life"
     pool_text = _POOL_TEXT.get(pool)
     pool_amt = _POOL_AMT.get(pool, 0)
 
@@ -85,18 +94,28 @@ def scaffold_gear(
             filled_out.append({"slot": slot, "base": base, "mods": mods})
 
     after = engine.get_defenses()
+    chaos = (after.get("resistances") or {}).get("chaos")
+    note = (
+        f"Placeholder BASELINE gear to make the build engine-evaluable — NOT real items and "
+        f"NOT optimal. It closed the elemental resistance gaps (toward {target_resist}%) and "
+        f"added a {pool} pool. Replace each piece with real drops (search_mods/search_uniques) "
+        f"and check cost with get_prices. Weapons/offense are left to you."
+    )
+    # Chaos resistance isn't scaffolded (slots are spent on the 3 elements + pool); flag it so it
+    # isn't forgotten — it has no area penalty but matters in the endgame.
+    if isinstance(chaos, (int, float)) and chaos <= 0:
+        note += (
+            f" Chaos resistance is {chaos} and was NOT scaffolded — add it on real gear (a suffix) "
+            f"toward positive/capped."
+        )
     return {
         "ok": True,
         "filled": filled_out,
         "pool": pool,
         "resistsAfter": after.get("resistances"),
+        "chaosResAfter": chaos,
         "lifeAfter": after.get("life"),
         "energyShieldAfter": after.get("energyShield"),
         "totalEHPAfter": after.get("totalEHP"),
-        "note": (
-            f"Placeholder BASELINE gear to make the build engine-evaluable — NOT real items and "
-            f"NOT optimal. It closed the build's resistance gaps (toward {target_resist}%) and "
-            f"added a {pool} pool. Replace each piece with real drops (search_mods/search_uniques) "
-            f"and check cost with get_prices. Weapons/offense are left to you."
-        ),
+        "note": note,
     }

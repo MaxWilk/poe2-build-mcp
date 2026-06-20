@@ -157,12 +157,29 @@ def set_level(level: int) -> dict[str, Any]:
 
 @mcp.tool()
 def set_skill(skill: str) -> dict[str, Any]:
-    """Set the active build's main skill using Path of Building's paste format.
+    """Set the active build's MAIN skill using Path of Building's paste format.
 
-    Format: "<Gem Name> <level>/<quality>  <count>", e.g. "Fireball 20/0  1". Multiple
-    gems (a skill + its supports) can be newline-separated. Returns updated stats.
+    Format: "<Gem Name> <level>/<quality>  <count>", e.g. "Fireball 20/0  1". A skill + its
+    support gems go on newline-separated lines (the trailing count is tolerated if omitted).
+    Returns updated stats — including `ProjectileCount` and a `dpsNote` for multi-projectile
+    skills (TotalDPS is per-projectile, so effective DPS is higher). For auras/heralds/Archmage
+    and other persistent buffs, use `add_skill_group` so they apply *without* replacing the main.
     """
     return get_engine().paste_skill(skill)
+
+
+@mcp.tool()
+def add_skill_group(skill: str) -> dict[str, Any]:
+    """Add an ENABLED secondary skill group (aura, herald, or persistent buff) WITHOUT changing
+    the main skill — so its buff/reservation applies to the active build.
+
+    This is how you model the damage layers that carry endgame casters/attackers: auras (Wrath,
+    Herald of Thunder), the Archmage mana-stacking buff, etc. Same paste format as `set_skill`
+    ("<Gem> <level>/<quality>  <count>", supports newline-separated). The group is added enabled
+    and its effect is reflected in the returned stats; the main skill is preserved. Mind Spirit
+    reservation — check it still fits (get_build_stats / list_config_options) after stacking auras.
+    """
+    return get_engine().add_skill_group(skill)
 
 
 @mcp.tool()

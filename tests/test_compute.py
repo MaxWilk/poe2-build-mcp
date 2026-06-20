@@ -104,6 +104,66 @@ def test_damage_diagnostic_flags_buff_skill(engine):
     assert r.get("warning") and "buff/reservation" in r["warning"]
 
 
+def _spark_caster(engine):
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.add_item(
+        "Rarity: Rare\nW\nDueling Wand\n+5 to Level of all Lightning Spell Skills\n"
+        "Adds 1 to 85 Lightning Damage to Spells\n112% increased Spell Damage"
+    )
+
+
+def test_paste_tolerates_missing_count(engine):
+    # Supports written without the trailing count must not be silently dropped (#4).
+    _spark_caster(engine)
+    engine.paste_skill("Spark 20/20  1\nControlled Destruction 20/20\nLightning Penetration 20/20")
+    names = [g["name"] for g in engine.get_build()["mainSkillGroup"]]
+    assert "Controlled Destruction" in names and "Lightning Penetration" in names
+
+
+def test_multiprojectile_dps_note(engine):
+    # TotalDPS is per-projectile; a multi-projectile skill gets ProjectileCount + a dpsNote (#2).
+    _spark_caster(engine)
+    r = engine.paste_skill("Spark 20/20  1")
+    assert (r["stats"].get("ProjectileCount") or 0) > 1
+    assert r.get("dpsNote") and "projectile" in r["dpsNote"].lower()
+
+
+def test_support_level_does_not_change_dps(engine):
+    # PoE2 supports are fixed-effect (don't scale with gem level); level field is cosmetic (#3).
+    _spark_caster(engine)
+    lvl1 = engine.paste_skill("Spark 20/20  1\nControlled Destruction 1/20  1")["stats"]["TotalDPS"]
+    _spark_caster(engine)
+    lvl20 = engine.paste_skill("Spark 20/20  1\nControlled Destruction 20/20  1")["stats"][
+        "TotalDPS"
+    ]
+    assert lvl1 == pytest.approx(lvl20, rel=1e-6)
+
+
+def test_add_skill_group_applies_aura_without_changing_main(engine):
+    # A second enabled group (Archmage) must buff the main skill, not replace it (#1).
+    _spark_caster(engine)
+    engine.paste_skill("Spark 20/20  1\nControlled Destruction 20/20  1")
+    engine.set_config(custom_mods="+2000 to maximum Mana")
+    before = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    engine.add_skill_group("Archmage 20/20  1")
+    after = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    assert engine.get_build()["mainSkill"] == "Spark"  # main unchanged
+    assert after > before * 1.2  # Archmage's mana-based damage applied
+
+
+def test_optimize_passives_spends_full_budget(engine):
+    # The two-pass optimizer (Notables then small nodes) shouldn't leave a big chunk unspent (#5).
+    _spark_caster(engine)
+    engine.paste_skill("Spark 20/20  1\nControlled Destruction 20/20  1")
+    r = engine.optimize_passives(metric="balanced", points=0)
+    # two passes (Notables then small nodes) spend nearly the whole 113-point budget; only a few
+    # genuinely-unplaceable points may remain (was ~31 with the Notables-only single pass).
+    assert r["pointsUsed"] >= 100
+    assert r["pointsRemaining"] <= 8
+
+
 def test_damage_diagnostic_silent_when_computable(engine):
     engine.new_build()
     engine.set_class("Witch", "Infernalist")

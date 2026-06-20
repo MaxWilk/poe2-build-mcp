@@ -56,7 +56,7 @@ end
 local DEFAULT_STATS = {
 	"TotalDPS", "FullDPS", "CombinedDPS", "AverageDamage", "Speed", "HitChance",
 	"CritChance", "CritMultiplier", "ManaCost", "Life", "Mana", "EnergyShield",
-	"TotalEHP", "Ward", "Armour", "Evasion", "Str", "Dex", "Int",
+	"TotalEHP", "Ward", "Armour", "Evasion", "Str", "Dex", "Int", "ProjectileCount",
 }
 
 local function collectStats(keys)
@@ -194,7 +194,32 @@ local function statResult(keys)
 	if w then
 		r.warning = w
 	end
+	-- TotalDPS is per-projectile/per-hit. For a multi-projectile skill, a single target can be
+	-- struck by several projectiles, so effective DPS is higher — flag it so the number isn't
+	-- under-read (the engine can't know how many projectiles land; that's content-dependent).
+	local out = (build.calcsTab and build.calcsTab.mainOutput) or {}
+	local proj = tonumber(out.ProjectileCount) or 0
+	if proj > 1 and (tonumber(out.TotalDPS) or 0) > 0 then
+		r.dpsNote = "TotalDPS is for ONE projectile; this skill fires "
+			.. proj
+			.. " — a single target can be hit by several, so effective DPS is a multiple of this "
+			.. "(more on packs, fewer on a lone boss). Validate the real figure in-game."
+	end
 	return r
+end
+
+-- PoB's paste parser REQUIRES a trailing instance count on every gem line ("Name L/Q  count"),
+-- so a support written "Controlled Destruction 20/20" is silently dropped. Tolerate that by
+-- appending "  1" to any gem line that has level/quality but no count.
+local function normalizeSkillText(text)
+	local lines = {}
+	for line in tostring(text or ""):gmatch("([^\r\n]+)") do
+		if line:match("^%s*[%a':][%a':' ]* %d+/%d+%s*%u*%s*$") then
+			line = line:gsub("%s*$", "") .. "  1"
+		end
+		lines[#lines + 1] = line
+	end
+	return table.concat(lines, "\n")
 end
 
 local function selectMainSocketGroup(index)
@@ -324,12 +349,25 @@ function methods.load_build_xml(p)
 	return { mainSkill = mainSkillName(), stats = collectStats(p.keys) }
 end
 
--- Add a socket group from PoB's paste format, e.g. "Fireball 20/0  1".
+-- Add a socket group from PoB's paste format, e.g. "Fireball 20/0  1", and make it the main skill.
 function methods.paste_skill(p)
 	assert(p and p.text, "paste_skill requires params.text")
-	build.skillsTab:PasteSocketGroup(p.text)
+	build.skillsTab:PasteSocketGroup(normalizeSkillText(p.text))
 	runCallback("OnFrame")
 	selectMainSocketGroup(p.socketGroup or #build.skillsTab.socketGroupList)
+	return statResult(p.keys)
+end
+
+-- Add an ENABLED secondary socket group (an aura/herald/buff like Wrath or Archmage, or a second
+-- skill) WITHOUT changing the main skill, so its buff/reservation applies to the active build.
+-- This is how caster damage layers (auras, Archmage mana-stacking) get modelled.
+function methods.add_skill_group(p)
+	assert(p and p.text, "add_skill_group requires params.text")
+	local prevMain = build.mainSocketGroup or 1
+	build.skillsTab:PasteSocketGroup(normalizeSkillText(p.text))
+	runCallback("OnFrame")
+	-- keep the existing main skill; the new group stays enabled and applies its effect
+	selectMainSocketGroup(prevMain)
 	return statResult(p.keys)
 end
 
@@ -723,64 +761,83 @@ function methods.optimize_passives(p)
 		budget = math.max(0, availablePoints() - build.spec:CountAllocNodes())
 	end
 	local cap = p.candidates or 50
-	local nodeType = p.node_type or "Notable"
 	local spec = build.spec
 	local mo0 = build.calcsTab.mainOutput
 	local startDPS, startEHP = (mo0.TotalDPS) or 0, (mo0.TotalEHP) or 0
 	local startValue = balanced and 0 or ((mo0[metric]) or 0)
 	local chosen = {}
-	local used = 0
 
-	while budget > 0 do
-		local calcFunc, calcBase = build.calcsTab:GetMiscCalculator(build)
-		local baseVal = (calcBase[metric]) or 0
-		local baseDPS, baseEHP = (calcBase.TotalDPS) or 0, (calcBase.TotalEHP) or 0
+	-- One greedy pass over a single node type; allocates the reachable node (+ its path) that most
+	-- improves `metric` until nothing helps or the budget runs out. Returns points spent.
+	local function greedyPass(nodeType, budgetLeft)
+		local spent = 0
+		while budgetLeft > 0 do
+			local calcFunc, calcBase = build.calcsTab:GetMiscCalculator(build)
+			local baseVal = (calcBase[metric]) or 0
+			local baseDPS, baseEHP = (calcBase.TotalDPS) or 0, (calcBase.TotalEHP) or 0
 
-		local cands = {}
-		for _, node in pairs(spec.nodes) do
-			if
-				not node.alloc
-				and node.path
-				and node.type == nodeType
-				and node.pathDist
-				and node.pathDist <= budget
-			then
-				cands[#cands + 1] = node
+			local cands = {}
+			for _, node in pairs(spec.nodes) do
+				if
+					not node.alloc
+					and node.path
+					and node.type == nodeType
+					and node.pathDist
+					and node.pathDist <= budgetLeft
+				then
+					cands[#cands + 1] = node
+				end
 			end
+			table.sort(cands, function(a, b)
+				return (a.pathDist or 1e9) < (b.pathDist or 1e9)
+			end)
+
+			local best, bestGain, bestCost
+			for i = 1, math.min(#cands, cap) do
+				local node = cands[i]
+				local pathNodes = {}
+				for _, pn in ipairs(node.path) do
+					pathNodes[pn] = true
+				end
+				pathNodes[node] = true
+				local out = calcFunc({ addNodes = pathNodes })
+				local gain
+				if balanced then
+					local dD = baseDPS > 0 and (((out.TotalDPS or 0) - baseDPS) / baseDPS) or 0
+					local dE = baseEHP > 0 and (((out.TotalEHP or 0) - baseEHP) / baseEHP) or 0
+					gain = dD + dE
+				else
+					gain = ((out[metric]) or 0) - baseVal
+				end
+				if gain > 0 and (not best or gain > bestGain) then
+					best, bestGain, bestCost = node, gain, node.pathDist
+				end
+			end
+
+			if not best then
+				break
+			end
+			spec:AllocNode(best, nil)
+			build.buildFlag = true
+			runCallback("OnFrame")
+			chosen[#chosen + 1] =
+				{ name = best.name, id = best.id, cost = bestCost, gain = bestGain, type = nodeType }
+			spent = spent + bestCost
+			budgetLeft = budgetLeft - bestCost
 		end
-		table.sort(cands, function(a, b)
-			return (a.pathDist or 1e9) < (b.pathDist or 1e9)
-		end)
+		return spent
+	end
 
-		local best, bestGain, bestCost
-		for i = 1, math.min(#cands, cap) do
-			local node = cands[i]
-			local pathNodes = {}
-			for _, pn in ipairs(node.path) do
-				pathNodes[pn] = true
-			end
-			pathNodes[node] = true
-			local out = calcFunc({ addNodes = pathNodes })
-			local gain
-			if balanced then
-				local dD = baseDPS > 0 and (((out.TotalDPS or 0) - baseDPS) / baseDPS) or 0
-				local dE = baseEHP > 0 and (((out.TotalEHP or 0) - baseEHP) / baseEHP) or 0
-				gain = dD + dE
-			else
-				gain = ((out[metric]) or 0) - baseVal
-			end
-			if gain > 0 and (not best or gain > bestGain) then
-				best, bestGain, bestCost = node, gain, node.pathDist
-			end
-		end
-
-		if not best then break end
-		spec:AllocNode(best, nil)
-		build.buildFlag = true
-		runCallback("OnFrame")
-		chosen[#chosen + 1] = { name = best.name, id = best.id, cost = bestCost, gain = bestGain }
-		used = used + bestCost
-		budget = budget - bestCost
+	local nodeType = p.node_type or "Notable"
+	local used = greedyPass(nodeType, budget)
+	budget = budget - used
+	-- If we were filling the default (Notables), spend any leftover budget on small (Normal) nodes
+	-- too, so the tree isn't left point-starved — the common cause of "missing points" in exports.
+	local smallUsed = 0
+	if budget > 0 and nodeType == "Notable" then
+		smallUsed = greedyPass("Normal", budget)
+		used = used + smallUsed
+		budget = budget - smallUsed
 	end
 
 	local mo1 = build.calcsTab.mainOutput
@@ -788,18 +845,20 @@ function methods.optimize_passives(p)
 		metric = metric,
 		pointsUsed = used,
 		pointsRemaining = math.max(0, budget),
+		smallNodePoints = smallUsed,
 		allocated = chosen,
 	}
-	-- Greedy stops when no remaining node improves the metric, so it often leaves points unspent.
-	-- Flag it so they're not silently dropped from the export.
-	if budget > 0 then
+	-- Greedy stops when no remaining node improves the metric; flag a meaningful leftover (a few
+	-- stranded points that no node can usefully use aren't worth nagging about).
+	if budget > 5 then
+		local alt = balanced and "a single stat (e.g. 'TotalDPS' or 'Life')" or "'balanced'"
 		result.note = budget
-			.. " points left unspent — no remaining "
-			.. nodeType
-			.. " improved "
+			.. " points still unspent — no remaining notable or small node improved "
 			.. metric
-			.. ". Spend them with a different metric (try 'balanced'), node_type, or alloc_passive, "
-			.. "or note to the user that they're parked for later gear/scaling."
+			.. " from here. Try optimizing for "
+			.. alt
+			.. ", a different node_type, or alloc_passive toward a specific cluster; otherwise "
+			.. "they're parked for later gear/scaling (say so rather than leaving it implicit)."
 	end
 	if balanced then
 		-- single-metric value is meaningless here; report the DPS/EHP pair instead.

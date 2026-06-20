@@ -58,7 +58,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (47 MCP tools)
+### The toolset (48 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -66,6 +66,7 @@ engine confirms the effect.
 - `get_build()` / `export_build()` — full read-back / export as a PoB import code
 - `get_defenses()` — resists (+over-cap), EHP, and the active resistance-penalty assumption
 - `set_class(class, ascendancy?)` · `set_level(level)` · `set_skill(skill)` · `set_config(…)`
+- `add_skill_group(skill)` — add an aura/herald/buff (e.g. Archmage) that buffs the build without replacing the main skill
 - `equip_item(raw)` · `unequip_item(slot)` · `list_config_options(query?)`
 - `evaluate_build(goals)` — pass/fail against numeric goals · `compare_to(source)` — A/B deltas
 - `solve_for(metric, target, lever)` — root-find the modifier magnitude needed to hit a stat target

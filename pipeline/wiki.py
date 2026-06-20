@@ -89,6 +89,44 @@ def _slug(title: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
 
 
+def _is_heading(line: str) -> bool:
+    """Heuristic: a short line with no sentence-ending punctuation is a section header."""
+    line = line.strip()
+    return 0 < len(line) <= 60 and not re.search(r"[.:!?,)]$", line)
+
+
+def _trim_extract(text: str) -> str:
+    """Drop empty sections (a header followed by no body) and collapse blank-line runs.
+
+    MediaWiki plaintext extracts render template-driven sections (Related skills, Version
+    history, …) as bare headers with no content; strip them so the corpus stays readable.
+    """
+    text = re.sub(r"\n{3,}", "\n\n", (text or "").strip())
+    lines = text.split("\n")
+    out: list[str] = []
+    i, n = 0, len(lines)
+    while i < n:
+        cur = lines[i].strip()
+        if not cur:
+            i += 1
+            continue
+        if _is_heading(cur):
+            body: list[str] = []
+            j = i + 1
+            while j < n and not (lines[j].strip() and _is_heading(lines[j].strip())):
+                if lines[j].strip():
+                    body.append(lines[j].strip())
+                j += 1
+            if body:  # keep the header only when it has real content
+                out.append(cur)
+                out.extend(body)
+            i = j
+        else:
+            out.append(cur)
+            i += 1
+    return "\n".join(out)
+
+
 def _api(params: dict) -> dict:
     url = API + "?" + urllib.parse.urlencode({**params, "format": "json"})
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
@@ -111,7 +149,7 @@ def _fetch_extract(title: str) -> dict | None:
     for _pid, p in pages.items():
         if "missing" in p:
             return None
-        text = (p.get("extract") or "").strip()
+        text = _trim_extract(p.get("extract") or "")
         if not text:
             return None
         real_title = p.get("title") or title
@@ -164,7 +202,7 @@ def load_pages() -> list[dict]:
         except Exception:  # noqa: BLE001
             continue
         title = rec.get("title")
-        text = rec.get("text")
+        text = _trim_extract(rec.get("text") or "")  # also trim cached (pre-trim) extracts
         if not title or not text:
             continue
         out.append(
