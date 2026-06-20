@@ -183,6 +183,33 @@ def test_affix_pool_keeps_per_element_variants():
     assert all(m.get("group") for m in pool["prefixes"] + pool["suffixes"])
 
 
+def test_illegal_affixes_flags_mana_on_body_armour():
+    # The integrity check: a "% increased maximum Mana" affix can't roll on a body armour, so a
+    # hand-crafted "mana chest" is flagged (its computed DPS would include invented mods).
+    bad = db.illegal_affixes(
+        "Sacramental Robe",
+        ["60% increased maximum Mana", "109% increased Energy Shield", "+40% to Fire Resistance"],
+    )
+    flagged = {b["affix"] for b in bad}
+    assert "60% increased maximum Mana" in flagged
+    assert "109% increased Energy Shield" not in flagged  # %ES IS legal on an ES body
+    assert "+40% to Fire Resistance" not in flagged
+
+
+def test_illegal_affixes_clean_on_legit_gear():
+    # No false positives on real, craftable rolls.
+    assert (
+        db.illegal_affixes(
+            "Sapphire Ring", ["+140 to maximum Mana", "+42% to Lightning Resistance"]
+        )
+        == []
+    )
+    assert (
+        db.illegal_affixes("Ancestral Tiara", ["+170 to maximum Mana"]) == []
+    )  # mana legal on helmet
+    assert db.illegal_affixes("Totally Fake Base", ["anything"]) == []  # unknown base → no warnings
+
+
 def test_get_unique_disambiguates_base_type():
     # A base type name returns a clear message, not a confusing null (#8).
     from server.main import get_unique

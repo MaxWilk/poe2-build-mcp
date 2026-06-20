@@ -170,13 +170,16 @@ def set_level(level: int) -> dict[str, Any]:
 
 @mcp.tool()
 def set_skill(skill: str) -> dict[str, Any]:
-    """Set the active build's MAIN skill using Path of Building's paste format.
+    """Set the active build's MAIN skill (gem + its support gems) in PoB paste format.
 
-    Format: "<Gem Name> <level>/<quality>  <count>", e.g. "Fireball 20/0  1". A skill + its
-    support gems go on newline-separated lines (the trailing count is tolerated if omitted).
-    Returns updated stats — including `ProjectileCount` and a `dpsNote` for multi-projectile
-    skills (TotalDPS is per-projectile, so effective DPS is higher). For auras/heralds/Archmage
-    and other persistent buffs, use `add_skill_group` so they apply *without* replacing the main.
+    Format: "<Gem> <level>/<quality> <count>", e.g. "Fireball 20/0 1". List the main skill first,
+    then its supports — one gem per line, OR separated inline by " / ", "," or "|" (all accepted);
+    a bare name like "Lightning Penetration" gets a default level/quality (supports are fixed-effect
+    in PoE2, so it's cosmetic). This REPLACES the current main skill group; auras/heralds/Archmage
+    added via `add_skill_group` are separate groups and are preserved. If nothing parses (or the main
+    gem name isn't a real skill) the build is left UNCHANGED and `ok:false` is returned — it won't
+    silently drop supports or corrupt the skill. Returns updated stats, plus `ProjectileCount` + a
+    `dpsNote` for multi-projectile skills. For persistent buffs, use `add_skill_group`.
     """
     return get_engine().paste_skill(skill)
 
@@ -220,14 +223,58 @@ def list_config_options(query: str = "", limit: int = 60) -> dict[str, Any]:
     return get_engine().list_config_options(query=query, limit=limit)
 
 
+def _base_and_affixes(raw: str) -> tuple[str | None, list[str], bool]:
+    """From raw PoB item text, return (recognized base name, candidate affix lines, is_unique).
+
+    Base = the first header line (before the first dashed divider) that resolves to a real corpus
+    base. Affixes = the body lines after it. Permissive: non-mod lines are harmless because the
+    legality check only flags lines that match a real craftable mod.
+    """
+    lines = raw.splitlines()
+    div = next((i for i, ln in enumerate(lines) if ln.strip() and set(ln.strip()) == {"-"}), None)
+    header = lines[:div] if div is not None else lines[:3]
+    body = lines[div + 1 :] if div is not None else lines[3:]
+    is_unique = any(ln.strip().lower().startswith("rarity: unique") for ln in header)
+    base = None
+    for ln in header:
+        s = ln.strip()
+        if not s or s.lower().startswith("rarity:"):
+            continue
+        if corpus.get_item(s):
+            base = s
+            break
+    affixes = [ln.strip() for ln in body if ln.strip() and set(ln.strip()) != {"-"}]
+    return base, affixes, is_unique
+
+
 @mcp.tool()
 def equip_item(raw: str, slot: str | None = None) -> dict[str, Any]:
     """Equip an item on the active build from raw Path of Building item text.
 
     Replaces whatever is currently in the target slot. `slot` optionally forces the slot
     (e.g. "Ring 2", "Weapon 2"); otherwise the item's primary slot is used. Returns updated stats.
+
+    Hand-written items are checked against the real mod pool: if an affix can't roll on the base
+    type (e.g. flat/`%` maximum Mana on a body armour), the result carries `illegalAffixes` + a
+    `legalityWarning` — the computed stats then include invented mods and aren't achievable. Ground
+    gear in real mods (`optimize_item`, `parse_item`, `search_mods`) to avoid this.
     """
-    return get_engine().add_item(raw, slot=slot)
+    res = get_engine().add_item(raw, slot=slot)
+    try:
+        base, affixes, is_unique = _base_and_affixes(raw)
+        if base and not is_unique:
+            bad = corpus.illegal_affixes(base, affixes)
+            if bad:
+                res["illegalAffixes"] = bad
+                res["legalityWarning"] = (
+                    f"{len(bad)} affix(es) on this item do not roll on a {base} in PoE2, so the "
+                    "computed stats include invented mods and are NOT achievable on this base. "
+                    "Re-craft with real mods (optimize_item / parse_item / search_mods). "
+                    "Type-level check only — roll magnitudes aren't verified."
+                )
+    except Exception:
+        pass  # legality is advisory; never let it break an equip
+    return res
 
 
 @mcp.tool()

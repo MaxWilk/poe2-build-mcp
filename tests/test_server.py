@@ -30,6 +30,41 @@ def test_tool_surface_intact():
     assert len(tools) == 51
 
 
+def test_equip_item_flags_illegal_affixes(monkeypatch):
+    # The legality wiring: a body-armour "% maximum Mana" affix surfaces a warning (engine stubbed,
+    # so this tests the corpus check + merge, not the calc).
+    from server import main
+
+    class _Stub:
+        def add_item(self, raw, slot=None):
+            return {"ok": True, "slot": slot or "Body Armour", "stats": {"TotalDPS": 1.0}}
+
+    monkeypatch.setattr(main, "get_engine", lambda: _Stub())
+    raw = (
+        "Rarity: Rare\nFantasy Plate\nSacramental Robe\n--------\n"
+        "60% increased maximum Mana\n+40% to Fire Resistance"
+    )
+    res = main.equip_item(raw, slot="Body Armour")
+    assert res.get("illegalAffixes")
+    assert "Sacramental Robe" in (res.get("legalityWarning") or "")
+
+
+def test_equip_item_clean_gear_has_no_warning(monkeypatch):
+    from server import main
+
+    class _Stub:
+        def add_item(self, raw, slot=None):
+            return {"ok": True, "slot": slot or "Ring 1", "stats": {}}
+
+    monkeypatch.setattr(main, "get_engine", lambda: _Stub())
+    raw = (
+        "Rarity: Rare\nGood Ring\nSapphire Ring\n--------\n"
+        "+140 to maximum Mana\n+42% to Lightning Resistance"
+    )
+    res = main.equip_item(raw, slot="Ring 1")
+    assert "illegalAffixes" not in res and "legalityWarning" not in res
+
+
 def test_meta_builds_shape():
     # Network-free: exercise the league selection + formatting on a sample payload.
     from server.live import meta

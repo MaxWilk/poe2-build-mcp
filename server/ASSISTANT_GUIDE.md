@@ -105,7 +105,16 @@ realize it, then re-check defenses.
 - **One un-modeled multiplier:** Mana-Tempest-style "empower" buffs aren't computed (stats carry
   an `engineNote`), so real DPS is higher than shown there.
 - **Support gems are fixed-effect in PoE2** (don't scale with gem level — the `level:1` readback is
-  cosmetic). The paste format wants `"Name L/Q  count"`; a missing count is tolerated.
+  cosmetic). `set_skill` takes the main gem then its supports — one per line OR separated by
+  " / ", "," or "|"; bare names are fine. It REPLACES the main group (auras from `add_skill_group`
+  survive) and, on unparseable input, leaves the build unchanged with `ok:false` rather than
+  dropping supports — so trust its result, and don't hand-build piles of groups.
+- **Hand-crafted gear is checked for legality.** `equip_item` flags affixes that can't roll on the
+  base (`illegalAffixes` + `legalityWarning`) — e.g. body armour can't roll flat/`%` maximum Mana,
+  so a "mana chest" is a fantasy whose DPS isn't real. It's a *type* check (magnitudes aren't
+  verified), so don't invent oversized rolls either. **Prefer `optimize_item`** (it only uses real
+  craftable mods); for an EB mana-stacker, `%`-increased Energy Shield on ES (int) bases *is* your
+  mana — body armour gets mana from ES via Eldritch Battery, not from mana affixes.
 - **Controlled Destruction zeroes *base* crit** — "increased crit" does nothing on top; a non-crit
   build can't be made crit without a base crit source.
 - **Passive points are level-driven.** `optimize_passives(points<=0)` fills the remaining budget;

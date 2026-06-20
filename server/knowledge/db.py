@@ -403,6 +403,54 @@ def affix_pool(base_name: str, ilvl: int = 82) -> dict[str, list[dict[str, Any]]
     return {"prefixes": pre, "suffixes": suf}
 
 
+def _norm_mod_line(s: str) -> str:
+    """Normalize a mod/affix line for matching: lowercase, ranges/numbers → '#', collapse space."""
+    s = (s or "").lower().replace("(", "").replace(")", "")
+    s = re.sub(r"[+\-]?\d+(?:\.\d+)?", "#", s)
+    s = re.sub(r"#\s*-\s*#", "#", s)  # a "#-#" range collapses to a single "#"
+    s = re.sub(r"#+", "#", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def illegal_affixes(base_name: str, affix_lines: list[str]) -> list[dict[str, Any]]:
+    """Affix lines that name a real craftable mod which CANNOT roll on this base type.
+
+    Conservative on purpose (so it never cries wolf on real gear): a line is flagged only when its
+    normalized text matches a known craftable item prefix/suffix in the corpus AND none of that
+    mod's tier variants can roll on the base's type. Lines that match no craftable mod (uniques,
+    implicits, unusual phrasings) are left alone, and only the affix *type* is checked, not whether a
+    roll's magnitude is within tier range. Returns [] when the base is unknown.
+    """
+    base = get_item(base_name)
+    if not base:
+        return []
+    base_tags = set(base.get("tags") or [])
+    if not base_tags:
+        return []
+    con = _conn()
+    rows = con.execute(
+        "SELECT text, tags FROM mods WHERE domain = 'item' AND type IN ('prefix','suffix')"
+    ).fetchall()
+    index: dict[str, list[set[str]]] = {}
+    for r in rows:
+        tags = set(json.loads(r["tags"] or "[]"))
+        if not tags:
+            continue  # empty-tag mods (essence/unique-implicit artifacts) don't establish a restriction
+        for ln in (r["text"] or "").split("\n"):
+            n = _norm_mod_line(ln)
+            if n:
+                index.setdefault(n, []).append(tags)
+    out: list[dict[str, Any]] = []
+    for line in affix_lines:
+        n = _norm_mod_line(line)
+        variants = index.get(n)
+        if variants and not any(t & base_tags for t in variants):
+            out.append(
+                {"affix": line.strip(), "reason": f"this affix does not roll on a {base_name}"}
+            )
+    return out
+
+
 def _has_mechanics() -> bool:
     """Mechanics table exists only in schema_version >= 4 corpora (graceful on older data)."""
     con = _conn()

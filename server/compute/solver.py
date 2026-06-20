@@ -80,6 +80,24 @@ def _fmt(m: float) -> str:
     return str(int(round(m))) if abs(m - round(m)) < 1e-9 else f"{m:.2f}"
 
 
+def _apply_template(template: str, m: float) -> str:
+    """Fill a lever template's magnitude placeholder(s) with `m`.
+
+    Uses a plain substitution rather than ``str.format`` so a template with MORE than one
+    placeholder (e.g. "Adds {} to {} Lightning Damage to Spells") fills them all instead of
+    crashing with "Replacement index out of range", and stray literal braces never blow up.
+    """
+    val = _fmt(m)
+    if "{}" in template:
+        return template.replace("{}", val)
+    if "{0}" in template:
+        return template.replace("{0}", val)
+    try:
+        return template.format(val)
+    except (IndexError, KeyError, ValueError):
+        return template
+
+
 def list_levers() -> dict[str, Any]:
     """Named levers usable with solve_for/rank_levers, plus how to pass a custom one."""
     return {
@@ -107,7 +125,7 @@ def solve_for(
     snapshot = engine.get_xml()
 
     def probe(m: float) -> float:
-        mod = template.format(_fmt(m))
+        mod = _apply_template(template, m)
         combined = f"{base_mods}\n{mod}".strip() if base_mods else mod
         v = engine.set_config(custom_mods=combined, keys=[metric])["stats"].get(metric)
         return float(v) if isinstance(v, (int, float)) else float("nan")
@@ -226,7 +244,7 @@ def rank_levers(
         out: list[dict[str, Any]] = []
         for raw in templates:
             template = _template_for(raw)
-            mod = template.format(_fmt(unit))
+            mod = _apply_template(template, unit)
             combined = f"{base_mods}\n{mod}".strip() if base_mods else mod
             v = engine.set_config(custom_mods=combined, keys=[metric])["stats"].get(metric)
             if isinstance(v, (int, float)):

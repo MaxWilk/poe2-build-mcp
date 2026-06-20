@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import paths
+from .skilltext import normalize_skill_text
 
 _LUAJIT_FALLBACKS = (
     r"C:\msys64\ucrt64\bin\luajit.exe",
@@ -142,10 +143,10 @@ class PobEngine:
         return self.call("load_build_xml", xml=xml, name=name)
 
     def paste_skill(self, text: str) -> dict[str, Any]:
-        return self.call("paste_skill", text=text)
+        return self.call("paste_skill", text=normalize_skill_text(text))
 
     def add_skill_group(self, text: str) -> dict[str, Any]:
-        return self.call("add_skill_group", text=text)
+        return self.call("add_skill_group", text=normalize_skill_text(text))
 
     def get_stats(self, keys: list[str] | None = None) -> dict[str, Any]:
         return self.call("get_stats", keys=keys)

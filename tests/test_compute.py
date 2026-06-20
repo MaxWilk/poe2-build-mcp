@@ -393,6 +393,66 @@ def test_solve_for_noop_lever_detected(fireball):
     assert r["ok"] is False and "does not move" in r["error"]
 
 
+def test_set_skill_accepts_inline_separators(engine):
+    # The natural " / " (and ",") form must apply EVERY support, not just the first gem (the silent
+    # support-drop / "Elemental Storm" corruption bug). Bare support names are tolerated too.
+    _spark_caster(engine)
+    r = engine.paste_skill("Spark 20/20 1 / Controlled Destruction / Lightning Penetration")
+    names = [g["name"] for g in engine.get_build()["mainSkillGroup"]]
+    assert r["mainSkill"] == "Spark"
+    assert "Controlled Destruction" in names and "Lightning Penetration" in names
+
+
+def test_set_skill_replaces_main_group(engine):
+    # set_skill REPLACES the main group (no pile-up) yet preserves aura groups from add_skill_group.
+    _spark_caster(engine)
+    engine.paste_skill("Spark 20/20 1")
+    engine.add_skill_group("Archmage 20/20 1")
+    n_after_aura = engine.get_build()["skillGroupCount"]
+    for _ in range(3):
+        engine.paste_skill("Spark 20/20 1 / Controlled Destruction")
+    b = engine.get_build()
+    assert b["skillGroupCount"] == n_after_aura  # repeated calls did not accumulate stale groups
+    assert b["mainSkill"] == "Spark"
+
+
+def test_set_skill_unknown_gem_leaves_build_unchanged(engine):
+    # A bogus gem name must not silently corrupt the main skill — roll back + report (#set_skill).
+    _spark_caster(engine)
+    engine.paste_skill("Spark 20/20 1")
+    before = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    r = engine.paste_skill("Notaskill Foobar 20/20 1")
+    assert r.get("ok") is False
+    after = engine.get_build()
+    assert after["mainSkill"] == "Spark"  # unchanged
+    assert engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(before, rel=1e-6)
+
+
+def test_set_skill_recovers_after_bad_input(engine):
+    # The exact failure path from the test session: a bad paste must not wedge set_skill — a
+    # subsequent good paste recovers the main skill with all supports.
+    _spark_caster(engine)
+    engine.paste_skill("Spark 20/20 1")
+    engine.paste_skill("Notaskill 20/20 1")  # rejected, build unchanged
+    r = engine.paste_skill("Spark 20/20 1 / Controlled Destruction / Lightning Penetration")
+    names = [g["name"] for g in engine.get_build()["mainSkillGroup"]]
+    assert r["mainSkill"] == "Spark"
+    assert "Controlled Destruction" in names and "Lightning Penetration" in names
+
+
+def test_rank_levers_tolerates_multi_placeholder(fireball):
+    # A lever template with TWO "{}" (e.g. "Adds {} to {} ... Damage") must not crash (#rank_levers).
+    from server.compute import solver
+
+    r = solver.rank_levers(
+        fireball,
+        metric="TotalDPS",
+        unit=10,
+        levers=["Adds {} to {} Fire Damage to Spells", "{}% increased Fire Damage"],
+    )
+    assert r["ok"] and len(r["levers"]) == 2
+
+
 def test_blank_luajit_override_is_ignored(monkeypatch):
     # A manifest user-config left blank arrives as a non-existent path (e.g. the literal
     # "${user_config.luajit_path}"); it must not shadow the bundled/system LuaJIT.

@@ -378,12 +378,55 @@ function methods.load_build_xml(p)
 	return { mainSkill = mainSkillName(), stats = collectStats(p.keys) }
 end
 
--- Add a socket group from PoB's paste format, e.g. "Fireball 20/0  1", and make it the main skill.
+-- Set the build's MAIN skill from PoB's paste format ("Fireball 20/0  1", one gem per line). This
+-- REPLACES the current main socket group (auras/buffs added via add_skill_group are separate groups
+-- and are preserved) so repeated calls don't pile up stale groups. On a parse failure it rolls the
+-- build back and reports, rather than silently leaving a broken/"phantom" main skill.
 function methods.paste_skill(p)
 	assert(p and p.text, "paste_skill requires params.text")
+	local list = build.skillsTab.socketGroupList
+	local snapshot = build:SaveDB("code")
+	local prevMain = build.mainSocketGroup
+	local before = #list
 	build.skillsTab:PasteSocketGroup(normalizeSkillText(p.text))
-	runCallback("OnFrame")
-	selectMainSocketGroup(p.socketGroup or #build.skillsTab.socketGroupList)
+	if #list <= before then
+		-- Nothing parsed: don't repoint main at a stale group (the old corruption). Restore + report.
+		loadBuildFromXML(snapshot)
+		runCallback("OnFrame")
+		return {
+			ok = false,
+			error = "no gem could be parsed from the skill text. Use PoB paste format with ONE GEM "
+				.. "PER LINE — 'Name level/quality count' (e.g. 'Arc 20/20 1') — the main skill "
+				.. "first and each support on its own line. ' / ', '|' or ',' between gems also work.",
+			mainSkill = mainSkillName(),
+		}
+	end
+	-- The new group was appended at the end. Make it main and REMOVE the previous main group so
+	-- set_skill replaces rather than accumulates (aura/buff groups are untouched).
+	local newIndex = #list
+	if prevMain and prevMain >= 1 and prevMain <= before and prevMain ~= newIndex then
+		table.remove(list, prevMain)
+		if newIndex > prevMain then
+			newIndex = newIndex - 1
+		end
+	end
+	if build.skillsTab.controls and build.skillsTab.controls.groupList then
+		build.skillsTab.controls.groupList.selIndex = newIndex
+		build.skillsTab.controls.groupList.selValue = list[newIndex]
+	end
+	selectMainSocketGroup(newIndex)
+	-- A syntactically valid but unrecognized gem name parses into a group with no real skill (it
+	-- would read ~0 DPS). Don't leave the build in that state — restore + report.
+	if not mainSkillName() then
+		loadBuildFromXML(snapshot)
+		runCallback("OnFrame")
+		return {
+			ok = false,
+			error = "the main gem name wasn't recognized as a skill — check spelling with "
+				.. "find_skills. Build left unchanged.",
+			mainSkill = mainSkillName(),
+		}
+	end
 	return statResult(p.keys)
 end
 
@@ -617,6 +660,7 @@ function methods.get_build()
 		pointsUsed = used,
 		pointsAvailable = avail,
 		unspentPoints = unspent,
+		skillGroupCount = #(build.skillsTab.socketGroupList or {}),
 		stats = collectStats(),
 	}
 	-- An export with many unspent points reads to users as "missing" tree/campaign points; flag
