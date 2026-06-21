@@ -680,21 +680,22 @@ def optimize_item(
     rolls: str = "realistic",
     thorough: bool = False,
     keep_resists_capped: bool = True,
+    goals: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    """Craft the best-in-slot rare for a `slot` that maximizes `metric` (the gear min-maxer).
+    """Craft the best-in-slot rare for a `slot` — one `metric`, or a weighted blend via `goals`.
 
     Searches the slot's REAL craftable affix pool (from the base's mod restrictions) and greedily
-    fills prefixes/suffixes — respecting the 3/3 limits and mod-group exclusivity — to maximize
-    `metric` (e.g. "TotalDPS" on "Weapon 1", "TotalEHP" on "Body Armour"). Every candidate is
+    fills prefixes/suffixes — respecting the 3/3 limits and mod-group exclusivity. Every candidate is
     engine-computed. `base` defaults to the currently-equipped base in that slot (so a wand build
     stays a wand); pass it to try a different base. `rolls`: "realistic" (default) or "max"
     (idealized T1). `thorough=true` adds a swap pass. Returns the crafted item (equip with
-    equip_item), the metric before/after, and a warning if it breaks a resistance cap.
+    equip_item), the before/after numbers, and a warning if it breaks a resistance cap.
 
-    It maximizes ONE metric, so it strips the other axis (a TotalDPS craft carries no life/resists;
-    a TotalEHP craft carries no damage). Craft damage slots for TotalDPS and defensive slots for
-    TotalEHP, then re-check `get_defenses` — the resist-cap-break warning tells you when a craft
-    uncapped a resistance to re-cap elsewhere.
+    **For realistic gear, pass `goals`** — a weight map like {"TotalDPS": 0.6, "TotalEHP": 0.4} —
+    and the craft balances offense AND defense in one piece (real endgame gear is blended). Without
+    `goals` it maximizes the single `metric`, which strips the other axis (a TotalDPS craft carries
+    no life/resists). A blended craft returns `metricsBefore`/`metricsAfter` per goal. Either way,
+    re-check `get_defenses` after equipping.
 
     The result is a *theoretical best-in-slot target* — verify attainability and price with
     get_prices; it can't see un-modelled mechanics. Bounded greedy search, not a global optimum.
@@ -708,6 +709,29 @@ def optimize_item(
         rolls=rolls,
         thorough=thorough,
         keep_resists_capped=keep_resists_capped,
+        goals=goals,
+    )
+
+
+@mcp.tool()
+def rank_upgrades(
+    metric: str = "TotalDPS",
+    goals: dict[str, float] | None = None,
+    slots: list[str] | None = None,
+    rolls: str = "realistic",
+    top: int = 8,
+) -> dict[str, Any]:
+    """Rank gear slots by upgrade potential — "what should I craft/upgrade next?".
+
+    Recrafts each gear slot to its best (same crafter as optimize_item — a single `metric` or a
+    weighted `goals` blend like {"TotalDPS":0.6,"TotalEHP":0.4}) and ranks slots by the gain over
+    your CURRENT item there, so the top slot is where the next upgrade buys the most. Read-only —
+    every probe is snapshotted and restored. Gains are NOT additive (recrafting one slot shifts the
+    others): recraft the top slot, equip it, then re-run. Empty slots with no base are skipped —
+    explore those with optimize_item(slot, base=…). Targets are theoretical; price with get_prices.
+    """
+    return itemopt.rank_upgrades(
+        get_engine(), metric=metric, goals=goals, slots=slots, rolls=rolls, top=top
     )
 
 

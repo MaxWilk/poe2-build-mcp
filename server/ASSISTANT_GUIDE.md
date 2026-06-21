@@ -84,11 +84,11 @@ All compute tools operate on a single in-memory build that persists across calls
    `metric="balanced"`, or `goals={"TotalDPS":.5,"Life":.5}` for a weighted mix, or `require=[…]`
    to force keystones. `points=0` fills the budget.
 4. `optimize_item` per slot to craft best-in-slot gear (or `equip_item` real items;
-   `scaffold_gear` only to close *defensive* gaps on a skeleton). `optimize_item` maximizes ONE
-   metric, so it strips the other axis — craft damage slots (jewellery/gloves/weapon) for
-   `TotalDPS` and defensive slots (body/helm/boots/belt) for `TotalEHP`, then re-check
-   `get_defenses`. For a one-hand weapon, fill the **off-hand** (shield/focus) — a big, often-missed
-   EHP (or spirit) lever. `equip_jewel` into allocated tree sockets (`list_jewel_sockets`) — jewels
+   `scaffold_gear` only to close *defensive* gaps on a skeleton). **For realistic gear pass
+   `goals`** (e.g. `{"TotalDPS":0.6,"TotalEHP":0.4}`) so each craft blends offense AND defense in
+   one piece; a single `metric` strips the other axis. Not sure which slot to spend on? `rank_upgrades`
+   ranks every slot by the gain from recrafting it. Re-check `get_defenses` after. For a one-hand
+   weapon, fill the **off-hand** (shield/focus) — a big, often-missed EHP (or spirit) lever. `equip_jewel` into allocated tree sockets (`list_jewel_sockets`) — jewels
    are real power, don't skip them. Pass an explicit `slot` for the second of a pair (`"Ring 2"`,
    `"Weapon 2"`) — it defaults to slot 1 and will overwrite it otherwise.
 5. `apply_combat_profile` to switch on the realistic fight (boss tier + shock/curse/charges the
@@ -108,7 +108,8 @@ realize it, then re-check defenses.
 
 ## Which tool when
 
-- Max a gear slot → `optimize_item`. Shape the tree to a goal → `optimize_passives(goals=…)`.
+- Max a gear slot → `optimize_item` (pass `goals={…}` for a damage+defense **blend**, not a
+  one-axis craft). Which slot to upgrade next → `rank_upgrades`. Shape the tree → `optimize_passives(goals=…)`.
 - Which stat to chase next → `rank_levers`. How much of it to hit a target → `solve_for`
   (`list_levers` shows named levers). A/B two builds → `compare_to`.
 - "Is this build good?" → `evaluate_build` (numbers) + `build_advice("red flags")` (judgment).

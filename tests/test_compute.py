@@ -278,6 +278,56 @@ def test_optimize_item_warns_when_it_breaks_resist_cap(engine):
     assert any("below cap" in w for w in r["warnings"])
 
 
+def test_optimize_item_blended_goals_balances_offense_and_defense(engine):
+    # Weighted `goals` craft ONE piece carrying both damage and defense — the realistic-gear path,
+    # vs a single-metric craft that strips the other axis.
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nX\nGrand Spear\n--------\nAdds 40 to 80 Lightning Damage", slot="Weapon 1"
+    )
+    blend = itemopt.optimize_item(
+        engine, "Amulet", base="Absent Amulet", goals={"TotalDPS": 0.6, "TotalEHP": 0.4}
+    )
+    assert blend["ok"] and "goals" in blend
+    assert set(blend["metricsBefore"]) == {"TotalDPS", "TotalEHP"}
+    # one craft lifts BOTH axes above the current state...
+    assert blend["metricsAfter"]["TotalDPS"] > blend["metricsBefore"]["TotalDPS"]
+    assert blend["metricsAfter"]["TotalEHP"] > blend["metricsBefore"]["TotalEHP"]
+    # ...and carries a real defensive affix (life/resistance), which a pure-DPS craft would not
+    assert any(("life" in a.lower() or "resist" in a.lower()) for a in blend["affixes"])
+    # invalid goals are rejected, not silently treated as single-metric
+    bad = itemopt.optimize_item(engine, "Amulet", base="Absent Amulet", goals={"TotalDPS": 0})
+    assert bad["ok"] is False
+
+
+def test_rank_upgrades_orders_slots_by_gain(engine):
+    # The "what to upgrade next" tool: recrafts each slot and ranks by gain, high -> low, read-only.
+    from server import scaffold
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nX\nGrand Spear\n--------\nAdds 40 to 80 Lightning Damage", slot="Weapon 1"
+    )
+    scaffold.scaffold_gear(engine, pool="life", target_resist=75)  # give slots bases to rank
+    r = itemopt.rank_upgrades(engine, metric="TotalDPS", top=5)
+    assert r["ok"] and len(r["ranked"]) >= 3
+    deltas = [e["delta"] for e in r["ranked"]]
+    assert deltas == sorted(deltas, reverse=True)  # ranked high -> low
+    assert all({"slot", "item", "delta"} <= set(e) for e in r["ranked"])
+    assert engine.get_build()["mainSkill"] == "Lightning Spear"  # read-only: build unchanged
+    g = itemopt.rank_upgrades(engine, goals={"TotalDPS": 0.6, "TotalEHP": 0.4}, top=3)
+    assert g["ok"] and all("score" in e and "deltas" in e for e in g["ranked"])
+
+
 def test_new_build_resets(engine):
     # new_build clears gear/skills so a from-scratch build doesn't inherit a prior one's state.
     engine.new_build()
