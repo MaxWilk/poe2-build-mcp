@@ -46,6 +46,7 @@ together and how to avoid the common mistakes.
 
 - **Computed (engine — authoritative for *this* build):** `get_build_stats`, `get_defenses`,
   `evaluate_build`, `compare_to`, `solve_for`, `rank_levers`, `optimize_passives`, `optimize_item`,
+  `optimize_jewel`, `optimize_supports`, `rank_upgrades`, `plan_gear`,
   `alloc_passive`/`dealloc_passive`, `scaffold_gear`, `search_passives`/`get_passive` (query the
   active tree, with `pathDist` reachability), `engine_health`, and every `set_*`/`equip_*` mutator
   (they return fresh stats). Exact for the current build state.
@@ -73,8 +74,10 @@ All compute tools operate on a single in-memory build that persists across calls
 
 ## Canonical build (create → optimize → validate → cost → present)
 
-1. `new_build` → `set_class` → `set_level` → `set_skill` (main skill + its "more"-multiplier
-   support gems — pick them yourself; `find_supports_for` is utility-skewed).
+1. `new_build` → `set_class` → `set_level` → `set_skill` (main skill + a starter support set).
+   Supports are usually the biggest "more" multiplier AND the corpus has no support magnitudes — so
+   rather than guess, once a weapon is on (for attacks) let `optimize_supports` pick the best set
+   empirically (it measures each on the engine), then apply it with `set_skill`.
 2. `add_skill_group` for auras / heralds / reservation buffs — the persistent buffs that carry endgame
    damage. They apply *without* replacing the main skill; watch Spirit reservation.
 3. **Allocate the ascendancy** (`search_passives query="<ascendancy>"` → `alloc_passive` the
@@ -83,14 +86,15 @@ All compute tools operate on a single in-memory build that persists across calls
    bosses"), and easy to forget when building from scratch. Then `optimize_passives` for the tree —
    `metric="balanced"`, or `goals={"TotalDPS":.5,"Life":.5}` for a weighted mix, or `require=[…]`
    to force keystones. `points=0` fills the budget.
-4. `optimize_item` per slot to craft best-in-slot gear (or `equip_item` real items;
-   `scaffold_gear` only to close *defensive* gaps on a skeleton). **For realistic gear pass
-   `goals`** (e.g. `{"TotalDPS":0.6,"TotalEHP":0.4}`) so each craft blends offense AND defense in
-   one piece; a single `metric` strips the other axis. Not sure which slot to spend on? `rank_upgrades`
-   ranks every slot by the gain from recrafting it. Re-check `get_defenses` after. For a one-hand
-   weapon, fill the **off-hand** (shield/focus) — a big, often-missed EHP (or spirit) lever. `equip_jewel` into allocated tree sockets (`list_jewel_sockets`) — jewels
-   are real power, don't skip them. Pass an explicit `slot` for the second of a pair (`"Ring 2"`,
-   `"Weapon 2"`) — it defaults to slot 1 and will overwrite it otherwise.
+4. **Gear.** Fastest first pass: `plan_gear` crafts the WHOLE set at once (offense slots
+   damage-leaning, defense slots EHP-leaning so resists cap), then refine. Per slot: `optimize_item`
+   with **`goals`** (e.g. `{"TotalDPS":0.6,"TotalEHP":0.4}`) so each craft blends offense AND defense
+   — a single `metric` strips the other axis; `rank_upgrades` tells you which slot to recraft next.
+   Craft jewels with `optimize_jewel`, then `equip_jewel` into allocated tree sockets
+   (`list_jewel_sockets`) — jewels are real power, don't skip them. For a one-hand weapon, fill the
+   **off-hand** (shield/focus) — a big, often-missed EHP/spirit lever. Pass an explicit `slot` for
+   the second of a pair (`"Ring 2"`, `"Weapon 2"`) or it overwrites slot 1. `scaffold_gear` only
+   closes *defensive* gaps on a skeleton; `equip_item` for real drops. Re-check `get_defenses` after.
 5. `apply_combat_profile` to switch on the realistic fight (boss tier + shock/curse/charges the
    build maintains), **plus any build-specific enemy condition its ascendancy/keystones rely on**
    (scan `list_config_options`, e.g. Open Weakness, Critical Weakness; a conditional "more" stays
@@ -110,6 +114,9 @@ realize it, then re-check defenses.
 
 - Max a gear slot → `optimize_item` (pass `goals={…}` for a damage+defense **blend**, not a
   one-axis craft). Which slot to upgrade next → `rank_upgrades`. Shape the tree → `optimize_passives(goals=…)`.
+- Best support-gem set → `optimize_supports` (engine-measured — supports have no corpus magnitudes).
+  Craft a jewel → `optimize_jewel` (then `equip_jewel`). Gear a whole set at once (damage-max with
+  resists capped) → `plan_gear`, then refine top slots with `rank_upgrades` + `optimize_item`.
 - Which stat to chase next → `rank_levers`. How much of it to hit a target → `solve_for`
   (`list_levers` shows named levers). A/B two builds → `compare_to`.
 - "Is this build good?" → `evaluate_build` (numbers) + `build_advice("red flags")` (judgment).
@@ -160,10 +167,16 @@ realize it, then re-check defenses.
   build can't be made crit without a base crit source. Check a support's actual effect, don't assume.
 - **Passive points are level-driven.** `optimize_passives(points<=0)` fills the remaining budget;
   watch `unspentPoints`/`pointsRemaining`/`pointsNote` and `alloc_passive`'s over-budget warning.
+- **Crafts report realism, not a price.** `optimize_item` / `optimize_jewel` return `attainability`
+  (per affix: required ilvl + tier depth, "top tier of N") and a coarse `craft` effort
+  (trivial→very high) — a tier-depth heuristic (the data has no spawn-weights, and there's no live
+  rare-gear pricing). Read it as a realism check ("high effort = a chase craft"), not a drop-chance
+  or divine cost; price the result with `get_prices`.
 - **Jewels:** allocate a Socket node (`alloc_passive`), then `equip_jewel` into it
   (`list_jewel_sockets` shows sockets + which are allocated). A jewel in an UN-allocated socket
-  does nothing (the result warns). Jewels aren't covered by the equip legality check, so ground
-  their mods in real rolls (`search_mods`). Weapon-swap + jewel sockets are normal slots —
+  does nothing (the result warns). Craft jewels with `optimize_jewel` (real jewel mod pool —
+  Emerald=dex, Ruby=str, Sapphire=int, Diamond=all); hand-written jewels aren't legality-checked, so
+  ground their mods in real rolls (`search_mods`). Weapon-swap + jewel sockets are normal slots —
   `equip_item slot="Weapon 1 Swap"` works for a curse-on-swap weapon.
 - **Imported PoBs are often aspirational.** `import_build` returns `importCaveats` when the build
   carries author-added custom mods, an over-budget tree, or uncapped resists — factor those in

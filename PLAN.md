@@ -10,11 +10,13 @@
 
 ## Status — v1 functionally complete (2026-06)
 
-M0–M5 are implemented and verified: 51 MCP tools (compute, passives, corpus, live ops, optimize,
-self-update) with a golden-build pytest suite. Self-update (from validated releases) and a
-self-contained per-OS `.mcpb` pipeline are in place; the remaining step is the first tagged CI
-release to publish the bundles + update assets. `get_meta_builds` and per-level gem stats remain
-deferred (no public PoE2 builds API; needs stat-translation ingestion).
+M0–M5 are implemented and verified: 61 MCP tools (compute, passives, corpus, live ops, optimize,
+gear-crafting & build-maxing, self-update) with a golden-build pytest suite. Self-update (from
+validated releases) and a self-contained per-OS `.mcpb` pipeline ship in tagged CI releases.
+Recent surface: blended `optimize_item` (`goals`) with attainability/craft-effort,
+`optimize_supports`, `optimize_jewel`, `rank_upgrades`, `plan_gear`, the reference-build library
+(`list_reference_builds` / `benchmark_build`), and `get_meta_builds`. Per-level gem stats / support
+magnitudes remain deferred (needs a stat-translation ingestion layer).
 See [PACKAGING.md](PACKAGING.md) and [README.md](README.md).
 
 ---

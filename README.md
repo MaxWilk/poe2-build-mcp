@@ -44,9 +44,11 @@ poe2-build MCP tools."* so it prefers them automatically.
 **Import & analyze** a build from a PoB share code, a pobb.in/pastebin link, or raw PoB XML —
 then read back computed DPS, EHP, resistances, life/ES, and more.
 
-**Create & tweak** builds from scratch: set class/ascendancy, level, skills + supports, gear,
-config, and the passive tree, validating every change on the engine. There's a greedy passive
-optimizer and an A/B `compare_to`.
+**Create, craft & max** builds from scratch: set class/ascendancy, level, skills, gear, config, and
+the passive tree, validating every change on the engine. Optimizers craft blended best-in-slot gear
+and jewels, pick the strongest support set (engine-measured), plan a whole gear set that caps
+resists while maxing damage, and rank what to upgrade next — plus a greedy passive optimizer and an
+A/B `compare_to`.
 
 **Look things up** offline: items, skill/support gems, affixes, uniques, passives, ascendancies
 — a bundled SQLite/FTS corpus, no network needed.
@@ -58,7 +60,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (51 MCP tools)
+### The toolset (61 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -68,14 +70,22 @@ engine confirms the effect.
 - `set_class(class, ascendancy?)` · `set_level(level)` · `set_skill(skill)` · `set_config(…)`
 - `add_skill_group(skill)` — add an aura/herald/buff (e.g. Archmage) that buffs the build without replacing the main skill
 - `equip_item(raw)` · `unequip_item(slot)` · `list_config_options(query?)`
+- `list_jewel_sockets()` / `equip_jewel(raw, socket?)` — list tree jewel sockets / socket a jewel
+- `apply_combat_profile(tier, …)` — switch on a realistic boss-fight profile (shock/curse/charges) in one call
 - `evaluate_build(goals)` — pass/fail against numeric goals · `compare_to(source)` — A/B deltas
+- `pinnacle_readiness(min_dps?, min_ehp?)` — gate a build against the endgame checklist (resists + chaos + EHP + DPS)
+- `list_reference_builds(query?)` / `benchmark_build()` — browse / calibrate against engine-verified reference builds (calibration only)
 - `solve_for(metric, target, lever)` — root-find the modifier magnitude needed to hit a stat target
 - `rank_levers(metric?, unit?, levers?)` — rank stat levers by marginal gain; the min/max "where to invest next" tool
 - `list_levers()` — the named levers `solve_for`/`rank_levers` accept
 - `search_passives(query?, node_type?)` / `get_passive(node)`
 - `alloc_passive(node)` / `dealloc_passive(node)` — allocate/route by id or name, with deltas
 - `optimize_passives(metric, points, goals?, require?)` — greedy allocation: one stat, `"balanced"`, or weighted `goals` (e.g. Life+Crit); can `require` nodes
-- `optimize_item(slot, metric)` — craft the best-in-slot rare maximizing a metric (gear min-maxer; real mod pool, BiS target)
+- `optimize_item(slot, metric?, goals?)` — craft a best-in-slot rare for one metric or a weighted `goals` blend (damage+defense); reports per-affix attainability (ilvl/tier) + craft-effort
+- `optimize_jewel(metric?, base?, goals?)` — craft the best rare jewel (then socket with `equip_jewel`)
+- `optimize_supports(metric?, goals?)` — pick the best support-gem set, measured on the engine
+- `rank_upgrades(metric?, goals?)` — rank gear slots by recraft gain ("what to upgrade next")
+- `plan_gear(dps_weight?)` — plan a whole gear set: damage-max with resists capped (cross-slot budget allocation)
 - `scaffold_gear(pool?, target_resist?)` — fill empty defensive slots to close resist/pool gaps (baseline, not optimal)
 - `new_build()` — reset to a blank build (clean from-scratch start)
 - `engine_health()` — engine + install diagnostics (liveness, LuaJIT/tree/data/server versions)

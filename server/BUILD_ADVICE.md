@@ -17,8 +17,10 @@ raise it — not maximizing the number that's already highest.
 complete and resists are capped, find where the *next* point/currency pays most rather than
 guessing. `rank_levers` measures each candidate stat's real Δ on the current build and ranks
 them, so you spend on the lever that actually moves the number (often penetration or attack/cast
-speed over raw "increased" damage). Confirm the magnitude with `solve_for`, apply the real gear/
-tree change, then re-verify defense — a min/maxed build never trades back below the "done" bar.
+speed over raw "increased" damage). For concrete moves rather than abstract stats, `rank_upgrades`
+ranks which gear slot recrafts for the most gain, and `plan_gear` re-plans the whole set with
+resists kept capped. Confirm the magnitude with `solve_for`, apply the real gear/tree change, then
+re-verify defense — a min/maxed build never trades back below the "done" bar.
 
 ## What "done" looks like — targets, not vibes
 
@@ -76,7 +78,8 @@ core multiplier**, not more small increases. Work in this order:
    lever** — `rank_levers` tells you which actually moves *this* build.
 5. **Don't skip jewels.** Real endgame builds run **8–10 jewels**, including unique/timeless ones
    (Voices, Megalomaniac, From Nothing, Time-Lost) that supply huge passive/notable density — that's
-   often why a meta tree reads "over budget". `list_jewel_sockets` / `equip_jewel`.
+   often why a meta tree reads "over budget". Craft rare jewels with `optimize_jewel` and socket them
+   via `equip_jewel` (`list_jewel_sockets`).
 6. **Re-verify defense after each big swing.** Resists drift and silently break caps when you
    reshuffle gear for damage — re-check `get_defenses` every time.
 
@@ -188,8 +191,9 @@ Damage is computed in this order — knowing it tells you what's worth buying:
 
 1. **"More" beats "increased."** Increased modifiers add together (two +20% = ×1.4); "more"
    modifiers each multiply (two 20% more = ×1.44). Your biggest "more" multipliers come from
-   **support gems** — picking the right supports is usually your largest single damage lever
-   (`find_supports_for`).
+   **support gems** — picking the right supports is usually your largest single damage lever. The
+   corpus has no support magnitudes, so let `optimize_supports` pick the best set by measuring each
+   on the engine, rather than eyeballing it.
 2. **Stack flat added damage early.** It sits at the bottom of the order, so every increased /
    more / crit / speed multiplier on top scales it. Early flat damage compounds as your
    multipliers grow.
@@ -233,7 +237,8 @@ the engine.
 - **Commit to one damage type and scale it multiplicatively.** Pick a single damage type (often a
   single ailment too) and stack it rather than splitting across types. Support gems are the
   *backbone* — most of the damage comes from the multiplicative ("more") supports on the main
-  skill; gear and tree add flat/increased on top.
+  skill (`optimize_supports` finds the best set by engine-measuring each); gear and tree add
+  flat/increased on top.
 - **Crit is all-or-nothing.** If a build goes crit, it commits to *both* crit chance and crit
   damage (plus a crit support) — half-invested crit is wasted. Builds that don't commit scale
   hit/ailment damage instead. Pick one lane.

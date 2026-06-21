@@ -10,7 +10,8 @@ run per-OS by [.github/workflows/release.yml](.github/workflows/release.yml). A 
 - `lib/` — vendored Python dependencies (per-OS; compiled wheels like `pydantic-core` and
   `pywin32` are platform-specific, which is why bundles are built on each OS).
 - `pob/` — the PoB engine subset (`PathOfBuilding-PoE2/src`, `runtime/lua`, `pob_headless.lua`).
-- `data/corpus.sqlite` + `data/VERSION` — the bundled seed corpus.
+- `data/corpus.sqlite` + `data/reference_builds.json` + `data/VERSION` — the bundled seed corpus
+  plus the calibration reference-build set (used by `list_reference_builds` / `benchmark_build`).
 - `runtime/luajit/<platform>/luajit[.exe]` — LuaJIT, built from source in CI (the PoB-pinned
   commit). `server/paths.py` auto-detects it.
 
@@ -27,8 +28,9 @@ uv run python scripts/build_bundle.py --version 2026.06.19
 # -> dist/poe2-build-mcp-<version>-<platform>.mcpb
 ```
 
-> The release workflow needs a first real run to shake out per-OS specifics (notably the
-> Windows LuaJIT DLL set and macOS arm64 wheels) — CI is the source of truth for shipped bundles.
+> CI is the source of truth for shipped bundles: it builds LuaJIT per-OS, checks out the pinned PoB
+> commit and applies the tracked `pob/patches/`, then builds + publishes all three OS bundles (the
+> Windows LuaJIT DLL set and macOS arm64 wheels are handled there).
 
 ## Self-update
 

@@ -870,7 +870,10 @@ def get_gem(name_or_id: str) -> dict[str, Any] | None:
 
 @mcp.tool()
 def find_supports_for(skill: str, limit: int = 25) -> dict[str, Any]:
-    """Find support gems for a skill: its curated recommendations plus tag-compatible supports."""
+    """List support gems for a skill: curated recommendations + tag-compatible supports (most
+    relevant first). This only LISTS candidates — to actually pick the best set, use
+    `optimize_supports`, which measures each on the engine (the corpus has no support magnitudes).
+    """
     return corpus.find_supports_for(skill, limit=limit)
 
 
@@ -1191,8 +1194,9 @@ def start_build_session(opening: str = "") -> str:
         "What you can do here:\n"
         "- Analyze a build: import_build (a PoB code, pobb.in/pastebin link, or XML), then get_build "
         "/ get_defenses / get_build_stats, and suggest engine-validated improvements.\n"
-        "- Build from scratch: set_class → set_level → set_skill (find_supports_for for supports) → "
-        "optimize_passives / alloc_passive → equip_item, validating each step on the engine.\n"
+        "- Build from scratch: set_class → set_level → set_skill → optimize_supports (best support "
+        "set) → allocate the ascendancy + optimize_passives → gear with plan_gear / optimize_item "
+        "(goals) / optimize_jewel → apply_combat_profile + gate, validating each step on the engine.\n"
         "- Solve toward a goal: solve_for, evaluate_build, optimize_passives.\n"
         "- Look things up: items, gems, mods, uniques, passives, ascendancies; check live prices.\n\n"
         "If the player hasn't said what they want, ask whether they'd like to analyze an existing "
@@ -1208,10 +1212,11 @@ def analyze_build(source: str) -> str:
         f"Import this Path of Exile 2 build and analyze it:\n\n{source}\n\n"
         "Steps: call import_build, then get_build, get_defenses, and get_build_stats to see "
         "where it stands. Identify the biggest weaknesses (offense, survivability, resist caps). "
-        "Use the corpus (search_*, find_supports_for, explain_mechanic) to find concrete "
-        "improvements, then VALIDATE each suggestion on the engine (mutate and re-read stats, "
-        "or compare_to) before recommending it. Distinguish PoB-computed numbers from "
-        "corpus facts, and never state a number the engine didn't produce."
+        "Find concrete improvements (rank_upgrades for the highest-gain gear slot, optimize_supports "
+        "for the support set, optimize_item/optimize_jewel for crafts, search_*/explain_mechanic for "
+        "options), then VALIDATE each suggestion on the engine (mutate and re-read stats, or "
+        "compare_to) before recommending it. Distinguish PoB-computed numbers from corpus facts, and "
+        "never state a number the engine didn't produce."
     )
 
 
@@ -1221,11 +1226,13 @@ def build_from_goal(goal: str, character_class: str = "") -> str:
     cls = f" Start from the {character_class} class." if character_class else ""
     return (
         f"Create a Path of Exile 2 build for this goal:\n\n{goal}\n{cls}\n\n"
-        "Follow create → validate → cost → present: set_class → set_level → set_skill (use "
-        "find_supports_for for supports) → for an attack skill equip a weapon FIRST (equip_item) "
-        "so DPS computes → allocate the tree (optimize_passives, including metric='balanced' to "
-        "raise offense AND defense) → equip the weapon + offense/identity gear, then scaffold_gear "
-        "to fill the remaining slots to capped resists + a real pool (replace it with real drops).\n\n"
+        "Follow create → validate → cost → present: set_class → set_level → set_skill → for an "
+        "attack skill equip a weapon FIRST (equip_item) so DPS computes → optimize_supports for the "
+        "best support set → allocate the ascendancy (often the build's biggest multiplier) + "
+        "optimize_passives (metric='balanced' to raise offense AND defense) → gear it: plan_gear for "
+        "a whole-set first pass (or optimize_item per slot with goals={'TotalDPS':..,'TotalEHP':..} "
+        "for blends), optimize_jewel for jewels, rank_upgrades to find the next slot to improve → "
+        "apply_combat_profile for the realistic fight.\n\n"
         "A build is NOT done until it clears a real bar (see build_advice('targets')): resists "
         "capped, a full gear set, a meaningful hit pool, DPS that clears the player's content, and "
         "sustain. CONFIRM with get_defenses + evaluate_build against explicit goals; sanity-check "
@@ -1242,8 +1249,9 @@ def audit_defenses() -> str:
         "Audit the active build's defenses. Call get_defenses and report life/ES, EHP, and "
         "elemental + chaos resistances with over-cap. Remember PoB's default endgame resistance "
         "penalty makes fresh resists deeply negative — that's expected; the target is the 75% "
-        "cap. Identify the weakest defensive layer and propose specific, engine-validated fixes "
-        "(gear mods via search_mods, uniques, or passives), confirming each with the engine."
+        "cap. Identify the weakest defensive layer and propose specific, engine-validated fixes — "
+        "recraft slots with optimize_item goals (or plan_gear to re-cap the whole set while keeping "
+        "damage), gear mods via search_mods, uniques, or passives — confirming each with the engine."
     )
 
 
