@@ -48,16 +48,18 @@ plainly; never present a skeleton as "done".
 Endgame content assumes very high DPS. If a build is far short, the fix is usually a **missing
 core multiplier**, not more small increases. Work in this order:
 
-1. **Find the DOMINANT multiplier and verify it with `rank_levers` — don't assume.** Archetypes
-   scale on different things; measure, don't guess. For most single-target BOSS builds the dominant
-   multiplier is **crit** (crit chance × crit multi can be **3–7×** — a real meta Comet build runs
-   ~98% crit / 7× multi). Other big levers: "+levels to skills", "more" supports, ailment magnitude
-   (shock far exceeds its 20% base), penetration/exposure. Put the dominant lever in *before*
-   fine-tuning gear, and look the skill up if unsure (`explain_mechanic`/`lookup_mechanic`).
-2. **Commit to crit unless you have a deliberate non-crit package.** Crit is usually the biggest
-   single multiplier, so going non-crit (e.g. Controlled Destruction) *forgoes* it — only do that if
-   a "more"-multiplier package makes up for the loss. Crit needs BOTH halves (chance + multi) and a
-   *base*-crit source; "increased" crit does nothing from zero, and some supports zero base crit.
+1. **Find THIS build's dominant multiplier and verify it with `rank_levers` — don't assume.**
+   Archetypes scale on different things; measure, don't reach for a favorite. The dominant lever
+   varies: it might be **crit** (chance × multi can be 3–7× — a meta Comet nuke runs ~98%/7×), a big
+   **"more"-multiplier** support stack, **ailment/DoT** (poison/ignite/bleed, or shock far exceeding
+   its 20% base), **minions**, **"+levels to skills"**, or **penetration/exposure**. There's no
+   universal answer — crit and mana-stacking are each just *one* option. Put whatever `rank_levers`
+   says dominates in *before* fine-tuning gear; look the skill up if unsure (`explain_mechanic`).
+2. **Pick ONE scaling identity and commit fully.** Either crit (commit to *both* chance and multi +
+   a *base*-crit source — half-invested crit is wasted, and "increased" crit does nothing from zero)
+   OR a non-crit lane (a "more"-multiplier stack, ailment/DoT, or minions). Don't half-do crit, and
+   don't bolt crit onto a skill/ascendancy that doesn't support it. Which lane is right depends on
+   the skill, ascendancy, and goal — not a default.
 3. **Match the skill to the goal — boss vs farm are different skills.** A slow, high-crit nuke (e.g.
    *Comet*), often triggered by **Cast on Critical**, is the single-target BOSS engine; a fast
    multi-projectile (e.g. *Spark*) is the CLEAR/farm engine. Don't optimize the clear skill for boss
@@ -82,9 +84,10 @@ like-for-like (FullDPS↔FullDPS, never one's TotalDPS vs another's FullDPS). Th
 conditions are **off by default**, so a bare stat read understates a real fight: use
 `apply_combat_profile` to switch on the shock/curse/charges/boss-tier the build actually maintains
 before judging DPS (turn off any it can't sustain — they'd inflate the number). The mana *pool*
-isn't automatically the master lever: real meta million-DPS builds (Comet/Cast-on-Critical for
-bossing, crit Spark for farm) run only ~6–8k mana and get most of their damage from **crit + the
-hit + chase jewels**, not pool size — let `rank_levers` find what actually moves *this* build.
+isn't automatically the master lever: some real meta million-DPS builds (e.g. Comet/Cast-on-Critical,
+crit Spark) run only ~6–8k mana and get most of their damage from **crit + the hit + chase jewels**,
+not pool size — but that's *those* builds, not a rule (ailment/DoT/minion builds scale elsewhere).
+Never assume one recipe; let `rank_levers` find what actually moves *this* build.
 **To chase a specific meta build, import its PoB** (`import_build`) and read its keystones, crit,
 skill (incl. trigger like Cast on Critical), and jewels — then build to that archetype and verify
 each layer on the engine; `compare_to` shows the per-stat gap. When the build looks done, gate it
