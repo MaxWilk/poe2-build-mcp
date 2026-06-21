@@ -21,9 +21,12 @@ together and how to avoid the common mistakes.
 4. **When DPS is far short of endgame, find the missing *multiplier*, don't tweak margins.** The
    dominant multiplier is build-specific — it could be crit (a meta nuke runs ~98% crit / 7× multi),
    a "more"-multiplier stack, ailment/DoT, minions, or "+levels". Find it with `rank_levers`; don't
-   default to crit OR mana-stacking — there's no one recipe. The fastest way to chase a *specific*
-   meta build is to `import_build` a known PoB and copy its archetype (skill + any trigger, scaling
-   identity, keystones, jewels), then verify each layer on the engine. See
+   default to crit OR mana-stacking — there's no one recipe. The **ascendancy** is a top multiplier
+   to check first (a conditional "more vs bosses" can be +50% — but only once its enemy-condition is
+   enabled; see the build flow). Note a from-scratch greedy build (`optimize_item`/`optimize_passives`)
+   plateaus well below a deeply min-maxed meta build (perfect +levels, top jewels, perfect crit), so
+   for a *true* endgame-DPS target, `import_build` a known PoB and copy its archetype (skill + any
+   trigger, scaling identity, keystones, jewels), then verify each layer on the engine. See
    `build_advice("Reaching endgame DPS")`.
 5. **Re-check `get_defenses` after every gear change.** Resists silently break caps when you
    reshuffle gear for damage — never trade a cap for DPS without noticing.
@@ -74,14 +77,26 @@ All compute tools operate on a single in-memory build that persists across calls
    support gems — pick them yourself; `find_supports_for` is utility-skewed).
 2. `add_skill_group` for auras / heralds / reservation buffs — the persistent buffs that carry endgame
    damage. They apply *without* replacing the main skill; watch Spirit reservation.
-3. `optimize_passives` for the tree — `metric="balanced"`, or `goals={"TotalDPS":.5,"Life":.5}`
-   for a weighted mix, or `require=[…]` to force keystones. `points=0` fills the budget.
+3. **Allocate the ascendancy** (`search_passives query="<ascendancy>"` → `alloc_passive` the
+   notables; ascendancy points are separate from the tree budget). Do this *early* — ascendancy
+   notables are frequently the build's single biggest multiplier (e.g. a conditional "more vs
+   bosses"), and easy to forget when building from scratch. Then `optimize_passives` for the tree —
+   `metric="balanced"`, or `goals={"TotalDPS":.5,"Life":.5}` for a weighted mix, or `require=[…]`
+   to force keystones. `points=0` fills the budget.
 4. `optimize_item` per slot to craft best-in-slot gear (or `equip_item` real items;
-   `scaffold_gear` only to close *defensive* gaps on a skeleton). `equip_jewel` into allocated
-   tree sockets (`list_jewel_sockets`) — jewels are real power for stackers, don't skip them.
+   `scaffold_gear` only to close *defensive* gaps on a skeleton). `optimize_item` maximizes ONE
+   metric, so it strips the other axis — craft damage slots (jewellery/gloves/weapon) for
+   `TotalDPS` and defensive slots (body/helm/boots/belt) for `TotalEHP`, then re-check
+   `get_defenses`. For a one-hand weapon, fill the **off-hand** (shield/focus) — a big, often-missed
+   EHP (or spirit) lever. `equip_jewel` into allocated tree sockets (`list_jewel_sockets`) — jewels
+   are real power, don't skip them. Pass an explicit `slot` for the second of a pair (`"Ring 2"`,
+   `"Weapon 2"`) — it defaults to slot 1 and will overwrite it otherwise.
 5. `apply_combat_profile` to switch on the realistic fight (boss tier + shock/curse/charges the
-   build maintains) so DPS isn't the bare default, then `get_defenses` (re-cap resists!) and gate
-   with `pinnacle_readiness` + `evaluate_build(goals)` against the player's content bar.
+   build maintains), **plus any build-specific enemy condition its ascendancy/keystones rely on**
+   (scan `list_config_options`, e.g. Open Weakness, Critical Weakness; a conditional "more" stays
+   invisible in DPS until you enable its condition — enable only what the build actually applies).
+   Then `get_defenses` (re-cap resists!) and gate with `pinnacle_readiness` +
+   `evaluate_build(goals)` against the player's content bar.
 6. `get_prices` to sanity-check cost → present, with `export_build`. **A build that fails the gate
    is flagged, not recommended.**
 

@@ -55,6 +55,11 @@ core multiplier**, not more small increases. Work in this order:
    its 20% base), **minions**, **"+levels to skills"**, or **penetration/exposure**. There's no
    universal answer — crit and mana-stacking are each just *one* option. Put whatever `rank_levers`
    says dominates in *before* fine-tuning gear; look the skill up if unsure (`explain_mechanic`).
+   **Allocate the ascendancy early — its notables are often the biggest single multiplier** (a
+   conditional "more vs bosses/rares" can be +50%). A *conditional* "more" stays invisible in the
+   DPS read until you switch on its enemy-condition (`apply_combat_profile`, or `set_config` from
+   `list_config_options` — e.g. Open Weakness, Critical Weakness), so allocate it AND enable the
+   condition the build genuinely applies.
 2. **Pick ONE scaling identity and commit fully.** Either crit (commit to *both* chance and multi +
    a *base*-crit source — half-invested crit is wasted, and "increased" crit does nothing from zero)
    OR a non-crit lane (a "more"-multiplier stack, ailment/DoT, or minions). Don't half-do crit, and

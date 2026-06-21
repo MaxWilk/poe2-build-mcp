@@ -879,6 +879,14 @@ function methods.get_defenses()
 			cold = n("ColdResistOverCap"),
 			lightning = n("LightningResistOverCap"),
 		},
+		-- Points BELOW the (real, raisable) cap per element, 0 when capped. PoB floors *ResistOverCap
+		-- at 0 so it can't reveal an UNDER-cap resist; this is the missing-to-cap gap (cap - final,
+		-- using PoB's actual per-element max), so callers like optimize_item can detect a broken cap.
+		resistMissing = {
+			fire = n("MissingFireResist"),
+			cold = n("MissingColdResist"),
+			lightning = n("MissingLightningResist"),
+		},
 		resistPenalty = penalty,
 		totalEHP = n("TotalEHP"),
 		note = ("Elemental resistances are shown net of PoB's configured area penalty "

@@ -236,6 +236,48 @@ def test_optimize_item_improves_and_is_valid(engine):
     assert engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
 
 
+def test_optimize_item_on_empty_weapon_slot_for_attack_skill(engine):
+    # Regression: a from-scratch attack build optimizes the WEAPON slot first, before any weapon is
+    # equipped. The skill is then uncomputable (DPS ~0) and the engine returns stats=[] (an empty Lua
+    # table serializes to JSON [], not {}), which crashed optimize_item with "'list' object has no
+    # attribute 'get'". It must instead craft a weapon and make DPS computable.
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")  # attack, no weapon -> uncomputable
+    assert isinstance(
+        engine.get_stats(["TotalDPS"])["stats"], dict
+    )  # not [] even when uncomputable
+    r = itemopt.optimize_item(engine, "Weapon 1", base="Grand Spear", metric="TotalDPS")
+    assert r["ok"]
+    assert r["metricBefore"] is None  # no weapon -> nothing to measure before
+    assert isinstance(r["metricAfter"], (int, float)) and r["metricAfter"] > 0
+    assert r["affixes"]  # crafted a real spear
+
+
+def test_optimize_item_warns_when_it_breaks_resist_cap(engine):
+    # Regression: the break check uses resistMissing (gap below the real per-element cap), NOT the
+    # floored *ResistOverCap. PoB floors over-cap at 0, so the old "over-cap goes negative" check was
+    # dead and the "drops resistance below cap" warning never fired.
+    from server import scaffold
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nX\nGrand Spear\n--------\nAdds 40 to 80 Lightning Damage", slot="Weapon 1"
+    )
+    scaffold.scaffold_gear(engine, pool="life", target_resist=75)
+    assert engine.get_defenses()["resistMissing"] == {"fire": 0, "cold": 0, "lightning": 0}
+    # a max-DPS amulet carries no resistances, so replacing the scaffold amulet must break a cap
+    r = itemopt.optimize_item(engine, "Amulet", metric="TotalDPS")
+    assert any("below cap" in w for w in r["warnings"])
+
+
 def test_new_build_resets(engine):
     # new_build clears gear/skills so a from-scratch build doesn't inherit a prior one's state.
     engine.new_build()

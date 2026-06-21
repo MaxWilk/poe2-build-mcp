@@ -75,8 +75,8 @@ def optimize_item(
     snapshot = engine.get_xml()
     try:
         before = engine.get_stats([metric])["stats"].get(metric)
-        before_res = (
-            (engine.get_defenses().get("resistOverCap") or {}) if keep_resists_capped else {}
+        before_missing = (
+            (engine.get_defenses().get("resistMissing") or {}) if keep_resists_capped else {}
         )
 
         chosen_pre: list[dict[str, str]] = []
@@ -147,11 +147,15 @@ def optimize_item(
         after = engine.get_stats([metric])["stats"].get(metric)
         warnings = []
         if keep_resists_capped:
-            after_res = engine.get_defenses().get("resistOverCap") or {}
-            # "Capped" = a non-negative over-cap buffer, so this is correct for raised max-res too,
-            # not just the default 75 (compare the buffer, not a hard-coded cap number).
+            after_missing = engine.get_defenses().get("resistMissing") or {}
+            # A resist "broke" if it was at/above cap before (0 points missing) and is below cap
+            # after (>0 missing). `resistMissing` uses PoB's real per-element cap, so this is correct
+            # for raised max-res too — not a hard-coded 75. (PoB floors *ResistOverCap at 0, so the
+            # old over-cap-goes-negative check could never fire.)
             broke = [
-                el for el in _RES_KEYS if (before_res.get(el) or 0) >= 0 > (after_res.get(el) or 0)
+                el
+                for el in _RES_KEYS
+                if (before_missing.get(el) or 0) <= 0 < (after_missing.get(el) or 0)
             ]
             if broke:
                 warnings.append(

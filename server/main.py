@@ -352,8 +352,9 @@ def _base_and_affixes(raw: str) -> tuple[str | None, list[str], bool]:
 def equip_item(raw: str, slot: str | None = None) -> dict[str, Any]:
     """Equip an item on the active build from raw Path of Building item text.
 
-    Replaces whatever is currently in the target slot. `slot` optionally forces the slot
-    (e.g. "Ring 2", "Weapon 2"); otherwise the item's primary slot is used. Returns updated stats.
+    Replaces whatever is currently in the target slot. `slot` optionally forces the slot; otherwise
+    the item's primary slot is used — which for a PAIRED slot is the first one, so pass an explicit
+    `slot` for "Ring 2"/"Weapon 2" or it silently overwrites Ring 1/Weapon 1. Returns updated stats.
 
     Hand-written items are checked against the real mod pool: if an affix can't roll on the base
     type (e.g. flat/`%` maximum Mana on a body armour), the result carries `illegalAffixes` + a
@@ -689,6 +690,11 @@ def optimize_item(
     stays a wand); pass it to try a different base. `rolls`: "realistic" (default) or "max"
     (idealized T1). `thorough=true` adds a swap pass. Returns the crafted item (equip with
     equip_item), the metric before/after, and a warning if it breaks a resistance cap.
+
+    It maximizes ONE metric, so it strips the other axis (a TotalDPS craft carries no life/resists;
+    a TotalEHP craft carries no damage). Craft damage slots for TotalDPS and defensive slots for
+    TotalEHP, then re-check `get_defenses` — the resist-cap-break warning tells you when a craft
+    uncapped a resistance to re-cap elsewhere.
 
     The result is a *theoretical best-in-slot target* — verify attainability and price with
     get_prices; it can't see un-modelled mechanics. Bounded greedy search, not a global optimum.

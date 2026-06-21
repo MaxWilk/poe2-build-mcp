@@ -173,7 +173,14 @@ class PobEngine:
         return self.call("equip_jewel", **params)
 
     def get_stats(self, keys: list[str] | None = None) -> dict[str, Any]:
-        return self.call("get_stats", keys=keys)
+        r = self.call("get_stats", keys=keys)
+        # An empty Lua stats table serializes to JSON [] (array), not {}. Normalize to a dict so
+        # callers can always treat stats as a mapping — otherwise an uncomputable build (e.g. an
+        # attack skill with no weapon equipped yet) returns stats=[] and crashes optimize_item /
+        # evaluate_build / compare_to with "'list' object has no attribute 'get'".
+        if isinstance(r, dict) and isinstance(r.get("stats"), list):
+            r["stats"] = {}
+        return r
 
     def set_config(
         self,
