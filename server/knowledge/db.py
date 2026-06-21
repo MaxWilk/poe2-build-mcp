@@ -106,7 +106,12 @@ def get_item(name_or_id: str) -> dict | None:
         "SELECT raw FROM items WHERE id = ? OR lower(name) = lower(?) LIMIT 1",
         (name_or_id, name_or_id),
     ).fetchone()
-    return json.loads(row["raw"]) if row else None
+    if not row:
+        return None
+    data = json.loads(row["raw"])
+    # Contract is dict | None: a malformed (e.g. list-shaped) raw must not leak out and crash
+    # callers with "'list' object has no attribute 'get'" (e.g. affix_pool). Degrade to None.
+    return data if isinstance(data, dict) else None
 
 
 def find_skills(
@@ -255,16 +260,15 @@ def mods_for_text(query: str, limit: int = 80) -> list[dict]:
     type (prefix/suffix), required_level, groups, and per-stat ranges.
     """
     con = _conn()
-    base = (
-        "SELECT m.text, m.type, m.required_level, m.groups{cols} "
-        "FROM mods_fts f JOIN mods m ON m.id = f.mod_id WHERE mods_fts MATCH ? LIMIT ?"
+    # `ranges` was added in schema v3; detect the column directly rather than catching
+    # OperationalError around the query (which would also swallow real FTS/SQL errors).
+    has_ranges = any(row[1] == "ranges" for row in con.execute("PRAGMA table_info(mods)"))
+    cols = ", m.ranges" if has_ranges else ""
+    rows = con.execute(
+        "SELECT m.text, m.type, m.required_level, m.groups" + cols + " "
+        "FROM mods_fts f JOIN mods m ON m.id = f.mod_id WHERE mods_fts MATCH ? LIMIT ?",
+        (_match_cols(query, ("text",)), limit),
     )
-    try:  # `ranges` was added in schema v3; tolerate an older auto-updated corpus
-        rows = con.execute(base.format(cols=", m.ranges"), (_match_cols(query, ("text",)), limit))
-        has_ranges = True
-    except sqlite3.OperationalError:
-        rows = con.execute(base.format(cols=""), (_match_cols(query, ("text",)), limit))
-        has_ranges = False
     return [
         {
             "text": r["text"],

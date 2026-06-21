@@ -12,9 +12,12 @@ together and how to avoid the common mistakes.
 2. **Verify before you assert — especially "the tool is wrong."** If a number looks off, prove
    why with a controlled probe (change one input, re-read) before claiming the engine under-reports
    or is buggy. Most "wrong" numbers are a missing build piece or a default you didn't check.
-3. **Ground everything in real data.** Gear comes from real mods (`optimize_item`, `search_mods`),
-   never invented affixes. When unsure how a mechanic/keystone/skill works, **look it up first**
-   (`explain_mechanic` / `lookup_mechanic`) — guessing wastes turns.
+3. **Ground everything in real data; never assert a mechanic from memory.** Gear comes from real
+   mods (`optimize_item`, `search_mods`), never invented affixes. When you are not 100% sure how a
+   mechanic/keystone/skill/interaction works — e.g. whether a skill *shotguns* (overlaps multiple
+   hits on one target), what limits its rate (cast speed vs cooldown vs mana), or how a support
+   behaves — **look it up first** (`explain_mechanic` / `lookup_mechanic`) or prove it with a
+   controlled engine probe. Guessing wastes turns and ships wrong claims.
 4. **When DPS is far short of endgame, find the missing *multiplier*, don't tweak margins.** The
    dominant multiplier is build-specific — it could be crit (a meta nuke runs ~98% crit / 7× multi),
    a "more"-multiplier stack, ailment/DoT, minions, or "+levels". Find it with `rank_levers`; don't
@@ -29,6 +32,12 @@ together and how to avoid the common mistakes.
 7. **Use the tools proactively, and label your facts.** Whenever the user asks about a build, item,
    skill, mechanic, or number, use the toolset — and say which bucket each answer came from
    ("PoB computes 1.2M DPS" vs "the corpus lists…" vs "Trade price is roughly…").
+8. **Don't default to a particular skill, ascendancy, or archetype.** When the user hasn't named
+   one, derive it from their stated goal/content (boss vs farm, playstyle) — using `get_meta_builds`
+   as *context* and the engine to compare — instead of reaching for a favorite. This guide names no
+   skills on purpose; let the player's goal and the engine's numbers pick. The reference-build
+   library (`list_reference_builds` / `benchmark_build`) is **calibration only** — never reproduce a
+   reference build as the answer; it exists to range-check numbers and reveal an archetype's lever.
 
 ## Three kinds of facts
 
@@ -63,7 +72,7 @@ All compute tools operate on a single in-memory build that persists across calls
 
 1. `new_build` → `set_class` → `set_level` → `set_skill` (main skill + its "more"-multiplier
    support gems — pick them yourself; `find_supports_for` is utility-skewed).
-2. `add_skill_group` for auras / heralds / Archmage — the persistent buffs that carry endgame
+2. `add_skill_group` for auras / heralds / reservation buffs — the persistent buffs that carry endgame
    damage. They apply *without* replacing the main skill; watch Spirit reservation.
 3. `optimize_passives` for the tree — `metric="balanced"`, or `goals={"TotalDPS":.5,"Life":.5}`
    for a weighted mix, or `require=[…]` to force keystones. `points=0` fills the budget.
@@ -89,6 +98,8 @@ realize it, then re-check defenses.
   (`list_levers` shows named levers). A/B two builds → `compare_to`.
 - "Is this build good?" → `evaluate_build` (numbers) + `build_advice("red flags")` (judgment).
   Endgame/pinnacle defense gate → `pinnacle_readiness` (resists + chaos + EHP + DPS, not raw EHP).
+- Calibrate a build vs real high-end builds → `benchmark_build`; browse references by archetype →
+  `list_reference_builds`. **Calibration ONLY — never copy/recommend a reference; build to the goal.**
 - Realistic boss DPS (not the bare default) → `apply_combat_profile`. Add tree jewels →
   `equip_jewel` (+ `list_jewel_sockets`). Curses/second damage skill → `add_skill_group`
   (`in_full_dps=True` for a second damage skill so FullDPS aggregates).
@@ -101,17 +112,17 @@ realize it, then re-check defenses.
   penalty; bring them to the 75% cap via gear/tree. `get_defenses` reports over-cap (a buffer).
 - **`TotalDPS` is ONE hit; read `FullDPS` for multi-hit/projectile skills.** TotalDPS is a single
   hit of the main skill. `FullDPS` is PoB's all-hits-landing estimate (overlapping projectiles,
-  secondary/ailment, DoT). For a projectile skill that overlaps on a target (e.g. **Spark**,
-  where TotalDPS can be ~1/10th of FullDPS), the realistic boss number is between them, closer to
-  FullDPS — the `dpsNote` says so when they diverge. PoE2 has no shotgunning, so never just multiply
-  TotalDPS by projectile count; for single-projectile skills (Arc, Fireball) TotalDPS *is* the
-  boss number. Comparing two builds? Use the same metric (FullDPS↔FullDPS) — don't pit one skill's
+  secondary/ailment, DoT) — an upper bound. The realistic single-target number is between TotalDPS
+  and FullDPS and depends on **how many of the skill's hits/projectiles overlap on one target, which
+  is per-skill in PoE2** — some skills shotgun, many don't, so don't assume either way; verify the
+  specific skill (`explain_mechanic`/`lookup_mechanic`/in-game). The `dpsNote` flags when the two
+  diverge. Comparing two builds? Use the same metric (FullDPS↔FullDPS) — don't pit one skill's
   TotalDPS against another's FullDPS.
 - **A ~0-DPS result is often *uncomputable*, not a bug — read the `warning`.** Causes: an Attack
-  with no weapon (equip Weapon 1), a buff/reservation skill that isn't a hit (e.g. Plague Bearer),
+  with no weapon (equip Weapon 1), a buff/reservation skill that isn't a hit,
   an undamageable minion, or %-of-life/corpse detonation. Say "validate kill speed in-game," don't
   report the 0 as the build's damage.
-- **Auras/Archmage need `add_skill_group`, not `set_skill`** (which would make the buff the main
+- **Auras and reservation buffs need `add_skill_group`, not `set_skill`** (which would make the buff the main
   skill and read ~0). Their buff is often a large chunk of caster damage.
 - **The enemy defaults to ~Pinnacle (50% elemental resistance).** Set `enemyIsBoss`
   (None 0% / Boss 30% / Pinnacle 50% / Uber tankiest) to model the target. If `rank_levers` shows
@@ -129,8 +140,8 @@ realize it, then re-check defenses.
   verified), so don't invent oversized rolls either. **Prefer `optimize_item`** (it only uses real
   craftable mods); for an EB mana-stacker, `%`-increased Energy Shield on ES (int) bases *is* your
   mana — body armour gets mana from ES via Eldritch Battery, not from mana affixes.
-- **Controlled Destruction zeroes *base* crit** — "increased crit" does nothing on top; a non-crit
-  build can't be made crit without a base crit source.
+- **Some supports zero a skill's *base* crit** — then "increased crit" does nothing on top; a non-crit
+  build can't be made crit without a base crit source. Check a support's actual effect, don't assume.
 - **Passive points are level-driven.** `optimize_passives(points<=0)` fills the remaining budget;
   watch `unspentPoints`/`pointsRemaining`/`pointsNote` and `alloc_passive`'s over-budget warning.
 - **Jewels:** allocate a Socket node (`alloc_passive`), then `equip_jewel` into it
@@ -142,6 +153,9 @@ realize it, then re-check defenses.
   carries author-added custom mods, an over-budget tree, or uncapped resists — factor those in
   before trusting its raw numbers (a shared "millions" PoB may assume gear/points it doesn't show).
 - **Finding things:** `find_skills` searches gems; `search_items` searches item bases.
+- **Weapon choice is not class-locked.** Any class/ascendancy can wield any weapon whose attribute
+  requirements it meets — pick the weapon for the build's scaling (and stat budget), not the class.
+  A class's *campaign* default weapon is a starting suggestion, not a restriction.
 - **Sustain & pricing:** compare `ManaCost` vs Mana+regen/leech (and Spirit); pricing is
   league-specific (`list_price_leagues`).
 - **Meta is context, not a target.** `get_meta_builds` is popularity, not a recommendation — build

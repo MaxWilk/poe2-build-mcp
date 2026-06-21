@@ -102,7 +102,8 @@ def check_for_updates() -> dict[str, Any]:
 
 
 def _verify(blob: bytes, sha: str | None) -> bool:
-    return (not sha) or hashlib.sha256(blob).hexdigest() == sha
+    # Refuse to "verify" when no checksum is published — an unverifiable blob must NOT install.
+    return bool(sha) and hashlib.sha256(blob).hexdigest() == sha
 
 
 def apply_updates(force: bool = False) -> dict[str, Any]:
@@ -122,7 +123,7 @@ def apply_updates(force: bool = False) -> dict[str, Any]:
     if corpus.get("url"):
         blob = _http(corpus["url"])
         if not _verify(blob, corpus.get("sha256")):
-            return {"updated": False, "error": "corpus checksum mismatch"}
+            return {"updated": False, "error": "corpus checksum missing or mismatched"}
         db.reset()  # release the read handle before replacing the file
         tmp = data_dir / "corpus.sqlite.tmp"
         tmp.write_bytes(blob)
@@ -136,7 +137,7 @@ def apply_updates(force: bool = False) -> dict[str, Any]:
     if engine.get("url") and (force or engine_sha != prev.get("engine_sha256")):
         blob = _http(engine["url"])
         if not _verify(blob, engine_sha):
-            return {"updated": False, "error": "engine checksum mismatch"}
+            return {"updated": False, "error": "engine checksum missing or mismatched"}
         with tempfile.TemporaryDirectory() as td:
             zpath = Path(td) / "engine.zip"
             zpath.write_bytes(blob)

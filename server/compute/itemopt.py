@@ -75,7 +75,9 @@ def optimize_item(
     snapshot = engine.get_xml()
     try:
         before = engine.get_stats([metric])["stats"].get(metric)
-        before_res = (engine.get_defenses().get("resistances") or {}) if keep_resists_capped else {}
+        before_res = (
+            (engine.get_defenses().get("resistOverCap") or {}) if keep_resists_capped else {}
+        )
 
         chosen_pre: list[dict[str, str]] = []
         chosen_suf: list[dict[str, str]] = []
@@ -145,17 +147,24 @@ def optimize_item(
         after = engine.get_stats([metric])["stats"].get(metric)
         warnings = []
         if keep_resists_capped:
-            after_res = engine.get_defenses().get("resistances") or {}
+            after_res = engine.get_defenses().get("resistOverCap") or {}
+            # "Capped" = a non-negative over-cap buffer, so this is correct for raised max-res too,
+            # not just the default 75 (compare the buffer, not a hard-coded cap number).
             broke = [
-                el
-                for el in _RES_KEYS
-                if (before_res.get(el) or 0) >= 75 and (after_res.get(el) or 0) < 75
+                el for el in _RES_KEYS if (before_res.get(el) or 0) >= 0 > (after_res.get(el) or 0)
             ]
             if broke:
                 warnings.append(
                     "this max-{} item drops {} resistance below cap — re-cap on another slot or "
                     "trade a damage suffix for resistance.".format(metric, "/".join(broke))
                 )
+        if not chosen:
+            warnings.append(
+                f"no affix in this base's pool improved {metric} — the active skill likely doesn't "
+                "scale off this slot (e.g. damage that doesn't use this item's stats). The crafted "
+                "item is blank; pick a slot/metric the skill actually moves, or optimize a defensive "
+                "metric (e.g. TotalEHP) on this slot instead."
+            )
     finally:
         engine.load_build_xml(snapshot)
 

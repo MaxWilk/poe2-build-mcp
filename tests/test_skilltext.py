@@ -24,9 +24,23 @@ def test_slash_separated_becomes_one_gem_per_line():
 
 
 def test_level_quality_slash_is_not_split():
-    # "20/20" must survive — only the surrounded " / " separator is a gem boundary.
+    # "20/20" must survive — only a separator slash (not the digit/digit L/Q slash) is a boundary.
     assert "20/20" in normalize_skill_text("Fireball 20/20")
     assert normalize_skill_text("Fireball 20/20") == "Fireball 20/20  1"  # count appended
+
+
+def test_spaceless_slash_separator_splits_without_dropping_supports():
+    # Regression: a "/" with NO surrounding spaces ("Arc/Lightning Penetration") must still split
+    # into separate gems — otherwise PoB parses only the first and silently drops the supports.
+    assert normalize_skill_text("Arc/Lightning Penetration").splitlines() == [
+        "Arc 20/20 1",
+        "Lightning Penetration 20/20 1",
+    ]
+    # ...but a level/quality slash next to a real separator must still survive ("20/20" stays).
+    assert normalize_skill_text("Comet 20/20 1/Cold Penetration").splitlines() == [
+        "Comet 20/20 1",
+        "Cold Penetration 20/20 1",
+    ]
 
 
 def test_mixed_separators_and_bare_names():

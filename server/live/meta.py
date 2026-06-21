@@ -48,11 +48,16 @@ def _trend(v: Any) -> str:
 
 
 def _is_main_league(name: str) -> bool:
-    """True for the main softcore challenge league (not HC/SSF/Standard/Ruthless)."""
-    n = (name or "").lower()
-    if n.startswith("hc ") or n.startswith("ssf "):
+    """True for the main softcore challenge league (not HC/SSF/Standard/Ruthless).
+
+    Token-based so a future league whose name merely *contains* one of these words as a
+    substring (e.g. "Substandard") isn't misclassified.
+    """
+    n = (name or "").lower().strip()
+    if n in ("standard", "hardcore", "ruthless"):
         return False
-    return not any(k in n for k in ("hardcore", "ssf", "standard", "ruthless"))
+    tokens = set(n.replace("(", " ").replace(")", " ").split())
+    return not (tokens & {"hc", "ssf", "hardcore", "ruthless"})
 
 
 def _select(leagues: list[dict], override: str | None) -> dict | None:

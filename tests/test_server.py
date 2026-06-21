@@ -27,13 +27,15 @@ def test_workflow_prompts_registered():
 
 def test_tool_surface_intact():
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 55
+    assert len(tools) == 57
     names = {t.name for t in tools}
     assert {
         "list_jewel_sockets",
         "equip_jewel",
         "apply_combat_profile",
         "pinnacle_readiness",
+        "list_reference_builds",
+        "benchmark_build",
     } <= names
 
 

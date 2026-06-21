@@ -29,6 +29,39 @@ def test_optimize_improves_dps(fireball):
     assert res["finalValue"] > res["startValue"]
 
 
+def test_split_personality_jewel_opens_other_class_regions(engine):
+    # "Split Personality" grants "allocate Passive Skills from <class>'s starting point" for several
+    # classes. Socketing it must register in the tree (spec.jewels) AND rebuild paths so each
+    # granted class-start becomes a path ROOT — making far regions cheaper for optimize_passives /
+    # alloc_passive. Regression for the dynamic-jewel pathing fix (shim socket-sync + fork
+    # multi-start). Uses classes that are NOT last in the list to prove ALL granted starts apply,
+    # not just PoB's single (last-overwritten) jewelData.alternateClassStart.
+    engine.new_build()
+    engine.set_class("Sorceress")
+    engine.set_level(90)
+    engine.alloc_passive(2491)  # allocate a jewel socket so a socketed jewel actually applies
+
+    def cheap_notables(k=20):
+        nodes = engine.search_passives(node_type="Notable", limit=4000)["results"]
+        return sum(1 for n in nodes if (n.get("pathDist") or 1000) <= k)
+
+    before = cheap_notables()
+    raw = (
+        "Rarity: Unique\nSplit Personality\nRuby\nLimited to: 1\n"
+        "Can Allocate Passive Skills from the Mercenary's starting point\n"
+        "Can Allocate Passive Skills from the Ranger's starting point\n"
+        "Can Allocate Passive Skills from the Warrior's starting point\n"
+        "Can Allocate Passive Skills from the Shadow's starting point\nCorrupted"
+    )
+    engine.call("equip_jewel", socket=2491, raw=raw)
+    after = cheap_notables()
+    assert after > before + 25, f"jewel opened too few cheap notables: {before} -> {after}"
+
+    # Unequipping reverts the tree pathing (no stale jewel state left behind).
+    engine.call("unequip_item", slot="Jewel 2491")
+    assert cheap_notables() == before
+
+
 def test_set_class_and_ascendancy(engine):
     engine.new_build()
     r = engine.set_class("Mercenary", "Witchhunter")

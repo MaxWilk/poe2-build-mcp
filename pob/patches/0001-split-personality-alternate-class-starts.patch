@@ -1,0 +1,43 @@
+diff --git a/src/Classes/Item.lua b/src/Classes/Item.lua
+index 423f476..d8221ed 100644
+--- a/src/Classes/Item.lua
++++ b/src/Classes/Item.lua
+@@ -1980,7 +1980,12 @@ function ItemClass:BuildModListForSlotNum(baseList, slotNum)
+ 			jewelData[value.key] = value.value
+ 		end
+ 		for _, className in ipairs(modList:List(nil, "AlternateClassStart")) do
++			-- poe2-build-mcp fork fix: a jewel can grant SEVERAL alternate class starts (e.g. Split
++			-- Personality grants all six). Upstream kept only the last; retain that for back-compat
++			-- but also collect the full list so PassiveSpec can honour every granted start.
+ 			jewelData.alternateClassStart = className
++			jewelData.alternateClassStarts = jewelData.alternateClassStarts or { }
++			table.insert(jewelData.alternateClassStarts, className)
+ 		end
+ 		if modList:List(nil, "FromNothingKeystones") then
+ 			jewelData.fromNothingKeystones = { }
+diff --git a/src/Classes/PassiveSpec.lua b/src/Classes/PassiveSpec.lua
+index e532c4a..b72dbb8 100644
+--- a/src/Classes/PassiveSpec.lua
++++ b/src/Classes/PassiveSpec.lua
+@@ -1230,11 +1230,16 @@ function PassiveSpecClass:BuildAllDependsAndPaths()
+ 	for socketNodeId, itemId in pairs(self.jewels) do
+ 		if self.allocNodes[socketNodeId] then
+ 			local item = self:GetJewel(itemId)
+-			local className = item and item.jewelData.alternateClassStart
+-			local startNodeId = self.tree.classStartNodeNameMap[className]
+-			local startNode = startNodeId and self.nodes[startNodeId]
+-			if startNode then
+-				alternateClassStartNodes[startNode.id] = startNode
++			-- poe2-build-mcp fork fix: honour EVERY alternate class start a jewel grants (Split
++			-- Personality grants six), falling back to the single legacy field for older data.
++			local classNames = item and item.jewelData and (item.jewelData.alternateClassStarts
++				or (item.jewelData.alternateClassStart and { item.jewelData.alternateClassStart }))
++			for _, className in ipairs(classNames or { }) do
++				local startNodeId = self.tree.classStartNodeNameMap[className]
++				local startNode = startNodeId and self.nodes[startNodeId]
++				if startNode then
++					alternateClassStartNodes[startNode.id] = startNode
++				end
+ 			end
+ 		end
+ 	end

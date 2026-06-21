@@ -1,0 +1,823 @@
+{
+ "_note": "Reference / CALIBRATION builds \u2014 engine-verified, NOT templates. Never copy, export, or recommend one of these wholesale when a user asks for a build. Use them only to (a) sanity-check that a build's numbers are in a sane endgame range and (b) see which lever an archetype actually scales on. The user's stated goal drives the build; these only calibrate it.",
+ "treeVersion": "0_5",
+ "dataVersion": null,
+ "count": 16,
+ "builds": [
+  {
+   "class": "Monk",
+   "ascendancy": "Martial Artist",
+   "mainSkill": "Flicker Strike",
+   "damageTypes": [],
+   "delivery": [
+    "attack",
+    "melee",
+    "area"
+   ],
+   "defenseIdentity": "energy-shield / CI (chaos-immune, life=1)",
+   "keystones": [
+    "Chaos Inoculation"
+   ],
+   "verified": {
+    "TotalDPS": 1425491,
+    "FullDPS": null,
+    "Life": 1,
+    "EnergyShield": 9200,
+    "Mana": 760,
+    "TotalEHP": 75515,
+    "resists": {
+     "chaos": 21,
+     "cold": 51,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": false,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 9.57
+    },
+    {
+     "lever": "Damage Penetrates N% Elemental Resistances",
+     "pctPerUnit": 1.35
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.0
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.8
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Witch",
+   "ascendancy": "Blood Mage",
+   "mainSkill": "Coiling Bolts",
+   "damageTypes": [
+    "chaos"
+   ],
+   "delivery": [
+    "spell",
+    "projectile"
+   ],
+   "defenseIdentity": "energy-shield",
+   "keystones": [
+    "Whispers of Doom"
+   ],
+   "verified": {
+    "TotalDPS": 1452015,
+    "FullDPS": null,
+    "Life": 3227,
+    "EnergyShield": 5427,
+    "Mana": 724,
+    "TotalEHP": 22661,
+    "resists": {
+     "chaos": 75,
+     "cold": 75,
+     "fire": 69,
+     "lightning": 75
+    },
+    "resistsCapped": false,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 23.76
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.04
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.84
+    },
+    {
+     "lever": "N% increased Cast Speed",
+     "pctPerUnit": 0.33
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Sorceress",
+   "ascendancy": "Disciple of Varashta",
+   "mainSkill": "Comet",
+   "damageTypes": [
+    "cold"
+   ],
+   "delivery": [
+    "spell",
+    "area"
+   ],
+   "defenseIdentity": "energy-shield / CI (chaos-immune, life=1)",
+   "keystones": [
+    "Chaos Inoculation",
+    "Elemental Equilibrium"
+   ],
+   "verified": {
+    "TotalDPS": 1672747,
+    "FullDPS": null,
+    "Life": 1,
+    "EnergyShield": 10971,
+    "Mana": 1085,
+    "TotalEHP": 33858,
+    "resists": {
+     "chaos": 0,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": true,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 2.06
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.03
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.79
+    },
+    {
+     "lever": "N% increased Cast Speed",
+     "pctPerUnit": 0.15
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Mercenary",
+   "ascendancy": "Gemling Legionnaire",
+   "mainSkill": "Hammer of the Gods",
+   "damageTypes": [],
+   "delivery": [
+    "attack",
+    "melee",
+    "slam",
+    "area"
+   ],
+   "defenseIdentity": "life / hybrid",
+   "keystones": [
+    "Giant's Blood"
+   ],
+   "verified": {
+    "TotalDPS": 1143903,
+    "FullDPS": null,
+    "Life": 2806,
+    "EnergyShield": 704,
+    "Mana": 1205,
+    "TotalEHP": 29728,
+    "resists": {
+     "chaos": 75,
+     "cold": 76,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": true,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 4.04
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.04
+    },
+    {
+     "lever": "N% increased Attack Speed",
+     "pctPerUnit": 0.55
+    },
+    {
+     "lever": "N% increased Damage",
+     "pctPerUnit": 0.12
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Witch",
+   "ascendancy": "Infernalist",
+   "mainSkill": "Reap",
+   "damageTypes": [
+    "physical"
+   ],
+   "delivery": [
+    "spell",
+    "area"
+   ],
+   "defenseIdentity": "mana as EHP+damage (Eldritch Battery + Mind over Matter)",
+   "keystones": [
+    "Eldritch Battery",
+    "Mind Over Matter",
+    "Pain Attunement"
+   ],
+   "verified": {
+    "TotalDPS": 3284218,
+    "FullDPS": null,
+    "Life": 1560,
+    "EnergyShield": 0,
+    "Mana": 4178,
+    "TotalEHP": 16787,
+    "resists": {
+     "chaos": 75,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": true,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 15.38
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.0
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.93
+    },
+    {
+     "lever": "N% increased Cast Speed",
+     "pctPerUnit": 0.47
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Monk",
+   "ascendancy": "Acolyte of Chayula",
+   "mainSkill": "Comet",
+   "damageTypes": [
+    "cold"
+   ],
+   "delivery": [
+    "spell",
+    "area"
+   ],
+   "defenseIdentity": "energy-shield routed to mana (Eldritch Battery)",
+   "keystones": [
+    "Eldritch Battery",
+    "Whispers of Doom"
+   ],
+   "verified": {
+    "TotalDPS": 1025537,
+    "FullDPS": null,
+    "Life": 1619,
+    "EnergyShield": 0,
+    "Mana": 8284,
+    "TotalEHP": 22594,
+    "resists": {
+     "chaos": 85,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": true,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 17.09
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.0
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.84
+    },
+    {
+     "lever": "N% increased Cast Speed",
+     "pctPerUnit": 0.18
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Druid",
+   "ascendancy": "Oracle",
+   "mainSkill": "Detonate Dead",
+   "damageTypes": [
+    "fire",
+    "physical"
+   ],
+   "delivery": [
+    "spell",
+    "area"
+   ],
+   "defenseIdentity": "energy-shield",
+   "keystones": [
+    "Blackflame Covenant",
+    "Elemental Equilibrium",
+    "Wildsurge Incantation"
+   ],
+   "verified": {
+    "TotalDPS": 1377014,
+    "FullDPS": null,
+    "Life": 1542,
+    "EnergyShield": 8152,
+    "Mana": 1085,
+    "TotalEHP": 20936,
+    "resists": {
+     "chaos": 75,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": true,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 2.09
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.04
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.75
+    },
+    {
+     "lever": "Damage Penetrates N% Elemental Resistances",
+     "pctPerUnit": 0.68
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Mercenary",
+   "ascendancy": "Tactician",
+   "mainSkill": "Supporting Fire",
+   "damageTypes": [],
+   "delivery": [
+    "minion"
+   ],
+   "defenseIdentity": "life / hybrid",
+   "keystones": [
+    "Giant's Blood",
+    "Glancing Blows",
+    "Whispers of Doom"
+   ],
+   "verified": {
+    "TotalDPS": null,
+    "FullDPS": null,
+    "Life": 2986,
+    "EnergyShield": 0,
+    "Mana": 1243,
+    "TotalEHP": 35004,
+    "resists": {
+     "chaos": 73,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 76
+    },
+    "resistsCapped": true,
+    "chaosHandled": false
+   },
+   "dpsComputable": false
+  },
+  {
+   "class": "Druid",
+   "ascendancy": "Shaman",
+   "mainSkill": "Detonate Dead",
+   "damageTypes": [
+    "fire",
+    "physical"
+   ],
+   "delivery": [
+    "spell",
+    "area"
+   ],
+   "defenseIdentity": "energy-shield routed to mana (Eldritch Battery)",
+   "keystones": [
+    "Eldritch Battery",
+    "Pain Attunement"
+   ],
+   "verified": {
+    "TotalDPS": 4332938,
+    "FullDPS": null,
+    "Life": 1711,
+    "EnergyShield": 192,
+    "Mana": 18626,
+    "TotalEHP": 42045,
+    "resists": {
+     "chaos": 0,
+     "cold": 65,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": false,
+    "chaosHandled": false
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 3.23
+    },
+    {
+     "lever": "Damage Penetrates N% Elemental Resistances",
+     "pctPerUnit": 1.08
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.0
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.81
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Ranger",
+   "ascendancy": "Deadeye",
+   "mainSkill": "Ice Shot",
+   "damageTypes": [
+    "cold"
+   ],
+   "delivery": [
+    "attack",
+    "projectile"
+   ],
+   "defenseIdentity": "energy-shield",
+   "keystones": [],
+   "verified": {
+    "TotalDPS": 1000238,
+    "FullDPS": null,
+    "Life": 1495,
+    "EnergyShield": 2328,
+    "Mana": 793,
+    "TotalEHP": 24628,
+    "resists": {
+     "chaos": 75,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": true,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 9.09
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.0
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.75
+    },
+    {
+     "lever": "N% increased Attack Speed",
+     "pctPerUnit": 0.53
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Warrior",
+   "ascendancy": "Titan",
+   "mainSkill": "His Scattering Calamity",
+   "damageTypes": [
+    "lightning"
+   ],
+   "delivery": [
+    "spell",
+    "projectile",
+    "area"
+   ],
+   "defenseIdentity": "life + mana buffer (Mind over Matter)",
+   "keystones": [
+    "Mind Over Matter",
+    "Pain Attunement"
+   ],
+   "verified": {
+    "TotalDPS": 1906440,
+    "FullDPS": null,
+    "Life": 1317,
+    "EnergyShield": 0,
+    "Mana": 5599,
+    "TotalEHP": 13817,
+    "resists": {
+     "chaos": 14,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": true,
+    "chaosHandled": false
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 27.95
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 0.96
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.78
+    },
+    {
+     "lever": "N% increased Cast Speed",
+     "pctPerUnit": 0.45
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Huntress",
+   "ascendancy": "Spirit Walker",
+   "mainSkill": "Twister",
+   "damageTypes": [],
+   "delivery": [
+    "attack",
+    "projectile",
+    "area"
+   ],
+   "defenseIdentity": "energy-shield",
+   "keystones": [
+    "Dance with Death"
+   ],
+   "verified": {
+    "TotalDPS": 1165254,
+    "FullDPS": null,
+    "Life": 1546,
+    "EnergyShield": 4416,
+    "Mana": 649,
+    "TotalEHP": 24530,
+    "resists": {
+     "chaos": 46,
+     "cold": 69,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": false,
+    "chaosHandled": false
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 5.84
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.54
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 1.42
+    },
+    {
+     "lever": "N% increased Attack Speed",
+     "pctPerUnit": 0.98
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Sorceress",
+   "ascendancy": "Chronomancer",
+   "mainSkill": "Comet",
+   "damageTypes": [
+    "cold"
+   ],
+   "delivery": [
+    "spell",
+    "area"
+   ],
+   "defenseIdentity": "mana as EHP+damage (Eldritch Battery + Mind over Matter)",
+   "keystones": [
+    "Eldritch Battery",
+    "Mind Over Matter"
+   ],
+   "verified": {
+    "TotalDPS": 6245072,
+    "FullDPS": null,
+    "Life": 1519,
+    "EnergyShield": 0,
+    "Mana": 4451,
+    "TotalEHP": 18933,
+    "resists": {
+     "chaos": 75,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 73
+    },
+    "resistsCapped": true,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 1.98
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.02
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.87
+    },
+    {
+     "lever": "N% increased Cast Speed",
+     "pctPerUnit": 0.26
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Monk",
+   "ascendancy": "Invoker",
+   "mainSkill": "Flicker Strike",
+   "damageTypes": [],
+   "delivery": [
+    "attack",
+    "melee",
+    "area"
+   ],
+   "defenseIdentity": "life / hybrid",
+   "keystones": [],
+   "verified": {
+    "TotalDPS": 2278898,
+    "FullDPS": null,
+    "Life": 1346,
+    "EnergyShield": 1645,
+    "Mana": 826,
+    "TotalEHP": 18476,
+    "resists": {
+     "chaos": 47,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 75
+    },
+    "resistsCapped": true,
+    "chaosHandled": false
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 4.52
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.0
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.81
+    },
+    {
+     "lever": "N% increased Attack Speed",
+     "pctPerUnit": 0.75
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Huntress",
+   "ascendancy": "Amazon",
+   "mainSkill": "Lightning Spear",
+   "damageTypes": [
+    "lightning"
+   ],
+   "delivery": [
+    "attack",
+    "projectile",
+    "area"
+   ],
+   "defenseIdentity": "life / hybrid",
+   "keystones": [],
+   "verified": {
+    "TotalDPS": 1671526,
+    "FullDPS": null,
+    "Life": 1812,
+    "EnergyShield": 326,
+    "Mana": 734,
+    "TotalEHP": 22588,
+    "resists": {
+     "chaos": 37,
+     "cold": 82,
+     "fire": 74,
+     "lightning": 82
+    },
+    "resistsCapped": true,
+    "chaosHandled": false
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 5.51
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.0
+    },
+    {
+     "lever": "+N% to Critical Damage Bonus",
+     "pctPerUnit": 0.71
+    },
+    {
+     "lever": "N% increased Attack Speed",
+     "pctPerUnit": 0.64
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  },
+  {
+   "class": "Mercenary",
+   "ascendancy": "Witchhunter",
+   "mainSkill": "Shockburst Rounds",
+   "damageTypes": [
+    "lightning"
+   ],
+   "delivery": [
+    "attack",
+    "projectile",
+    "area"
+   ],
+   "defenseIdentity": "life / hybrid",
+   "keystones": [],
+   "verified": {
+    "TotalDPS": 1384387,
+    "FullDPS": null,
+    "Life": 1704,
+    "EnergyShield": 0,
+    "Mana": 544,
+    "TotalEHP": 26893,
+    "resists": {
+     "chaos": 75,
+     "cold": 75,
+     "fire": 75,
+     "lightning": 74
+    },
+    "resistsCapped": true,
+    "chaosHandled": true
+   },
+   "dpsComputable": true,
+   "topLevers": [
+    {
+     "lever": "+N to Level of all Skills",
+     "pctPerUnit": 9.87
+    },
+    {
+     "lever": "Damage Penetrates N% Elemental Resistances",
+     "pctPerUnit": 2.08
+    },
+    {
+     "lever": "N% more Damage",
+     "pctPerUnit": 1.08
+    },
+    {
+     "lever": "N% increased Attack Speed",
+     "pctPerUnit": 0.71
+    }
+   ],
+   "dominantLever": "+N to Level of all Skills"
+  }
+ ]
+}

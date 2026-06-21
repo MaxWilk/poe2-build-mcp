@@ -2,10 +2,11 @@
 
 PoB's socket-group paste parser needs ONE GEM PER LINE in the form ``Name level/quality count``
 and silently drops any line it can't match — so a natural inline list like
-``Arc 20/20 1 / Lightning Penetration / Inspiration`` loses every support. This module makes the
-forgiving forms work by (a) splitting the inline separators people actually type (`` / ``, `` | ``,
-``, ``) onto their own lines — without touching the ``20/20`` level/quality slash, which has no
-surrounding spaces — and (b) giving bare gem names a default ``20/20 1`` and countless gem lines a
+``Arc 20/20 1 / Lightning Penetration`` (or the spaceless ``Arc/Lightning Penetration``) loses
+every support. This module makes the forgiving forms work by (a) splitting the inline separators
+people actually type (``/``, `` | ``, ``, ``) onto their own lines — a slash whether or not it has
+surrounding spaces, but NEVER the digit/digit ``20/20`` level/quality slash — and (b) giving bare
+gem names a default ``20/20 1`` and countless gem lines a
 trailing ``1`` (supports are fixed-effect in PoE2, so the level/quality is cosmetic).
 """
 
@@ -14,8 +15,8 @@ from __future__ import annotations
 import re
 
 _SEP_SLASH = re.compile(
-    r"\s+/\s+"
-)  # " / " gem separator; never matches the spaceless "20/20" slash
+    r"(?<!\d)/|/(?!\d)"
+)  # gem-separator "/" (spaced OR spaceless), but NEVER the digit/digit "20/20" level/quality slash
 _SEP_PIPE = re.compile(r"\s*\|\s*")
 _SEP_COMMA = re.compile(r"\s*,\s*")
 _LQ = re.compile(r"\b\d+/\d+\b")  # a level/quality token

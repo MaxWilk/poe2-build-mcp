@@ -319,15 +319,18 @@ def test_attack_rate_binds_to_weapon(engine):
     assert base > 0 and fast == pytest.approx(base * 2, rel=0.05)
 
 
-def test_multiprojectile_note_does_not_imply_shotgun(engine):
-    # The dpsNote must not tell users to multiply TotalDPS by projectile count (PoE2 has no
-    # shotgunning) — that was a wrong-advice regression (#4-5).
+def test_multiprojectile_note_frames_shotgun_as_per_skill(engine):
+    # The dpsNote must NOT claim PoE2 "has no shotgunning" (false — overlap is per-skill) and must
+    # NOT tell users to multiply TotalDPS by projectile count. It should frame overlap as per-skill
+    # and tell the reader to verify. (#4-5 wrong-advice regression guard.)
     _spark_caster(engine)
     r = engine.paste_skill("Spark 20/20  1")
     note = (r.get("dpsNote") or "").lower()
     assert note  # Spark fires many projectiles -> note present
     assert "multiple of this" not in note  # not the old "effective DPS is a multiple" advice
-    assert "do not multiply" in note and "shotgun" in note  # explicitly warns against shotgun math
+    assert "no shotgun" not in note  # must NOT claim PoE2 has no shotgunning
+    assert "per-skill" in note  # frames overlap/shotgun as per-skill
+    assert "verify" in note  # tells the reader to verify, not assume
 
 
 def test_solver_levers(engine):

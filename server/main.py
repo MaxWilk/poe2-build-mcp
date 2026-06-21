@@ -26,6 +26,7 @@ from .knowledge import advice
 from .knowledge import db as corpus
 from .knowledge import itemparse
 from .knowledge import mechanics
+from .knowledge import refbuilds
 from .live import meta as live_meta
 from .live import prices as live_prices
 from .live import update as live_update
@@ -208,6 +209,8 @@ def set_class(class_name: str, ascendancy: str | None = None) -> dict[str, Any]:
 @mcp.tool()
 def set_level(level: int) -> dict[str, Any]:
     """Set the active build's character level (1-100). Returns updated stats."""
+    if not 1 <= level <= 100:
+        return {"ok": False, "error": f"level must be in 1-100, got {level}"}
     return get_engine().set_level(level)
 
 
@@ -215,10 +218,10 @@ def set_level(level: int) -> dict[str, Any]:
 def set_skill(skill: str) -> dict[str, Any]:
     """Set the active build's MAIN skill (gem + its support gems) in PoB paste format.
 
-    Format: "<Gem> <level>/<quality> <count>", e.g. "Fireball 20/0 1". List the main skill first,
+    Format: "<Gem> <level>/<quality> <count>", e.g. "<gem name> 20/0 1". List the main skill first,
     then its supports — one gem per line, OR separated inline by " / ", "," or "|" (all accepted);
-    a bare name like "Lightning Penetration" gets a default level/quality (supports are fixed-effect
-    in PoE2, so it's cosmetic). This REPLACES the current main skill group; auras/heralds/Archmage
+    a bare support name gets a default level/quality (supports are fixed-effect
+    in PoE2, so it's cosmetic). This REPLACES the current main skill group; auras/heralds/reservation buffs
     added via `add_skill_group` are separate groups and are preserved. If nothing parses (or the main
     gem name isn't a real skill) the build is left UNCHANGED and `ok:false` is returned — it won't
     silently drop supports or corrupt the skill. Returns updated stats, plus `ProjectileCount` + a
@@ -232,8 +235,8 @@ def add_skill_group(skill: str, in_full_dps: bool = False) -> dict[str, Any]:
     """Add an ENABLED secondary skill group (aura, herald, or persistent buff) WITHOUT changing
     the main skill — so its buff/reservation applies to the active build.
 
-    This is how you model the damage layers that carry endgame casters/attackers: auras (Wrath,
-    Herald of Thunder), the Archmage mana-stacking buff, etc. Same paste format as `set_skill`
+    This is how you model the damage layers that carry endgame casters/attackers: auras, heralds,
+    and reservation/mana-scaling buffs, etc. Same paste format as `set_skill`
     ("<Gem> <level>/<quality>  <count>", supports newline-separated). The group is added enabled
     and its effect is reflected in the returned stats; the main skill is preserved. Mind Spirit
     reservation — check it still fits (get_build_stats / list_config_options) after stacking auras.
@@ -295,10 +298,10 @@ def apply_combat_profile(
         options["useFrenzyCharges"] = True
         assumptions.append("Frenzy Charges up (needs generation)")
     if full_es:
-        options["conditionsOnFullEnergyShield"] = True
+        options["conditionFullEnergyShield"] = True
         assumptions.append("on Full Energy Shield")
     if full_life:
-        options["conditionsOnFullLife"] = True
+        options["conditionFullLife"] = True
         assumptions.append("on Full Life")
     res = get_engine().set_config(options=options)
     res["assumptions"] = assumptions
@@ -853,6 +856,59 @@ def build_advice(topic: str = "") -> dict[str, Any]:
     for deciding what to change; the actual DPS/EHP numbers still come from the compute tools.
     """
     return advice.advise(topic)
+
+
+@mcp.tool()
+def list_reference_builds(query: str = "", limit: int = 8) -> dict[str, Any]:
+    """Browse engine-verified reference / CALIBRATION builds (corpus — offline, deterministic).
+
+    A deliberately diverse set of real high-end builds across many ascendancies/skills, kept ONLY
+    to calibrate. They are **not templates**: never copy, export, or recommend one wholesale when a
+    user asks for a build — build to the USER's stated goal and use these to sanity-check it. Filter
+    by `query` (class, ascendancy, skill, element, delivery like "spell"/"attack"/"minion", defense
+    like "CI"/"mana", or a lever). Each result returns the build's VERIFIED DPS/EHP, its archetype
+    tags, and the lever it scales on — enough to range-check a number or learn an archetype's
+    dominant scaler, with deliberately nothing to copy (no code, gear, or passive list).
+    """
+    return refbuilds.search(query=query, limit=limit)
+
+
+@mcp.tool()
+def benchmark_build() -> dict[str, Any]:
+    """Calibrate the ACTIVE build against the verified reference set (corpus + engine).
+
+    Compares this build's computed DPS/EHP to the distribution of real high-end builds of the SAME
+    delivery archetype (spell/attack/minion/…), and reports which levers those references scale on.
+    Answers "is this build's number in a sane endgame range, and what should I scale next?" — it is
+    a calibration check, NOT a license to copy a reference. The user's goal drives the build; if a
+    number is low, find the missing multiplier on THIS build (rank_levers), don't clone a reference.
+    """
+    eng = get_engine()
+    b = eng.get_build()
+    s = b.get("stats", {}) or {}
+    skill = b.get("mainSkill")
+    delivery_tags = (
+        "attack",
+        "spell",
+        "projectile",
+        "melee",
+        "minion",
+        "totem",
+        "trap",
+        "mine",
+        "brand",
+        "slam",
+        "channelling",
+        "area",
+    )
+    delivery: list[str] = []
+    if skill:
+        tags = (corpus.get_gem(skill) or {}).get("tags") or []
+        delivery = [t for t in delivery_tags if t in tags]
+    ehp = (eng.get_defenses() or {}).get("totalEHP")
+    return refbuilds.benchmark(
+        total_dps=s.get("TotalDPS"), full_dps=s.get("FullDPS"), ehp=ehp, delivery=delivery
+    )
 
 
 @mcp.tool()

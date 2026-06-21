@@ -76,6 +76,15 @@ def main() -> int:
     _copy(corpus, stage / "data" / "corpus.sqlite")
     (stage / "data" / "VERSION").write_text(args.version)
 
+    # Reference/calibration build set (committed source, small) — ships beside the corpus so
+    # list_reference_builds/benchmark_build work offline. Self-update doesn't touch it; it tracks
+    # the bundled code/tree version and refreshes on .mcpb reinstall.
+    refbuilds = ROOT / "data" / "reference_builds.json"
+    if refbuilds.exists():
+        _copy(refbuilds, stage / "data" / "reference_builds.json")
+    else:
+        print("NOTE: data/reference_builds.json missing — reference-build tools will be empty.")
+
     # PoB engine (the parts the headless engine needs at runtime)
     _copy(ROOT / "pob" / "pob_headless.lua", stage / "pob" / "pob_headless.lua")
     _copy(ROOT / "pob" / "PINNED.md", stage / "pob" / "PINNED.md")

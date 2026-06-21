@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  POB_BRANCH: dev
+  POB_COMMIT: a82a33b # pinned PoB-PoE2 (see pob/PINNED.md); CI checks out this exact SHA
   LUAJIT_COMMIT: 871db2c84ecefd70a850e03a6c340214a81739f0 # matches PoB's pinned LuaJIT
 
 jobs:
@@ -55,8 +55,13 @@ jobs:
           # luajit.exe links lua51.dll; its only other deps are the Windows UCRT (system DLLs).
           cp src/luajit.exe src/lua51.dll "$dest/"
 
-      - name: Check out pinned PoB
-        run: git clone --depth 1 --branch ${{ env.POB_BRANCH }} https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+      - name: Check out pinned PoB + apply fork patches
+        run: |
+          git init -q pob/PathOfBuilding-PoE2
+          git -C pob/PathOfBuilding-PoE2 remote add origin https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git
+          git -C pob/PathOfBuilding-PoE2 fetch -q --depth 1 origin ${{ env.POB_COMMIT }}
+          git -C pob/PathOfBuilding-PoE2 checkout -q FETCH_HEAD
+          (cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
 
       - run: uv sync
       - run: uv run ruff check server scripts pipeline tests
@@ -81,7 +86,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: sudo apt-get update && sudo apt-get install -y luajit zip
-      - run: git clone --depth 1 --branch ${{ env.POB_BRANCH }} https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+      - name: Check out pinned PoB + apply fork patches
+        run: |
+          git init -q pob/PathOfBuilding-PoE2
+          git -C pob/PathOfBuilding-PoE2 remote add origin https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git
+          git -C pob/PathOfBuilding-PoE2 fetch -q --depth 1 origin ${{ env.POB_COMMIT }}
+          git -C pob/PathOfBuilding-PoE2 checkout -q FETCH_HEAD
+          (cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
       - run: uv sync && uv run python -m pipeline.build_corpus
 
       - name: Assemble update payload + manifest

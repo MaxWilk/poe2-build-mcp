@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -120,6 +121,12 @@ class PobEngine:
                 resp = self._read_frame()
                 if resp.get("id") == req_id:
                     break
+                # A non-matching frame means a desync (stray/leftover emit); skip it but surface it
+                # on stderr rather than silently swallowing what could be a real protocol problem.
+                sys.stderr.write(
+                    f"[pob-engine] skipped stray frame id={resp.get('id')!r} "
+                    f"while awaiting id={req_id}\n"
+                )
             else:
                 raise PobEngineError(f"no response for request id={req_id} (engine desync)")
         if not resp.get("ok"):

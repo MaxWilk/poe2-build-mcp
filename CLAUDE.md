@@ -63,8 +63,9 @@ coordinator, not buried in a layer.
 **Python (3.11+)**
 - Managed with `uv`; all deps in `pyproject.toml` with a committed lockfile. No `pip install`
   into the ambient env.
-- **Full type hints** on public functions; `mypy` clean. Prefer typed models (`models.py`)
-  over passing raw dicts across layer boundaries.
+- **Full type hints** on public functions; `mypy` clean. Prefer typed structures (dataclasses /
+  `TypedDict`) for data crossing layer boundaries; MCP tools themselves return JSON-friendly
+  `dict[str, Any]` (there is no central `models.py`).
 - Format with `ruff format`; lint with `ruff` — both must pass in CI.
 - Small, single-purpose modules. One tool per logically-cohesive function; register tools in
   `main.py`, keep implementations in the layer packages.
@@ -91,7 +92,7 @@ Every MCP tool should:
 - Clearly distinguish *computed* facts (from the engine) from *looked-up* facts (from the
   corpus) from *live* facts (from the network), so the model can caveat appropriately.
 
-**Checklist for adding a tool:** input model + return model in `models.py` → implementation
+**Checklist for adding a tool:** typed inputs + a documented return shape on the tool fn → implementation
 in the right layer → registration in `main.py` → smoke test in `tests/` → docstring that
 states the data source (corpus / engine / live) → update PLAN.md catalog if it's new surface.
 

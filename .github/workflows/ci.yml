@@ -20,12 +20,16 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Check out PoB-PoE2 (pinned)
-        # Pinned ref recorded in pob/PINNED.md. Pin to the exact commit for reproducible CI.
+      - name: Check out PoB-PoE2 (pinned) + apply fork patches
+        # Pinned commit recorded in pob/PINNED.md — fetch the exact SHA for reproducible CI, then
+        # apply our tracked fork patches (pob/patches/) per CLAUDE.md §7.
         run: |
-          git clone --depth 1 --branch dev \
-            https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git \
-            pob/PathOfBuilding-PoE2
+          POB_COMMIT=a82a33b
+          git init -q pob/PathOfBuilding-PoE2
+          git -C pob/PathOfBuilding-PoE2 remote add origin https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git
+          git -C pob/PathOfBuilding-PoE2 fetch -q --depth 1 origin "$POB_COMMIT"
+          git -C pob/PathOfBuilding-PoE2 checkout -q FETCH_HEAD
+          (cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
 
       - name: Install dependencies
         run: uv sync

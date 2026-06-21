@@ -16,10 +16,26 @@ git submodule pinned to the commit below.
 ## Reproduce the working copy
 
 ```sh
-git clone --depth 1 --branch dev \
-  https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git \
-  pob/PathOfBuilding-PoE2
+# Fetch the EXACT pinned commit (below), not the moving `dev` tip — reproducible + matches CI.
+git init pob/PathOfBuilding-PoE2
+git -C pob/PathOfBuilding-PoE2 remote add origin \
+  https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git
+git -C pob/PathOfBuilding-PoE2 fetch --depth 1 origin a82a33b
+git -C pob/PathOfBuilding-PoE2 checkout FETCH_HEAD
+# then apply our tracked fork patches (see "Local patches" below)
+(cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
 ```
+
+## Local patches
+
+The vendored copy is git-ignored, so any unavoidable PoB-core change lives as a tracked
+`*.patch` under `pob/patches/` and is re-applied after clone (above) — never edited in place
+silently (CLAUDE.md §7). These are candidates to upstream to the fork; when one lands upstream,
+bump the pinned commit and drop the patch.
+
+| Patch | Why it can't live in the shim |
+|-------|-------------------------------|
+| `0001-split-personality-alternate-class-starts.patch` | A jewel can grant *several* alternate class starts (Split Personality grants all six). Upstream `Item.lua`/`PassiveSpec.lua` kept only the last, so jewel-pathing into multiple class regions was wrong. The fix is in PoB's tree/item build path — the shim can't reach it. |
 
 ## Runtime requirements (validated in M0 spike)
 

@@ -40,6 +40,14 @@ def corpus_path() -> Path:
     return _prefer(user_data_dir() / "corpus.sqlite", BUNDLE_ROOT / "data" / "corpus.sqlite")
 
 
+def reference_builds_path() -> Path:
+    """Bundled reference/calibration build library (data/reference_builds.json)."""
+    return _prefer(
+        user_data_dir() / "reference_builds.json",
+        BUNDLE_ROOT / "data" / "reference_builds.json",
+    )
+
+
 def pob_src_dir() -> Path:
     return _prefer(
         user_data_dir() / "pob" / "PathOfBuilding-PoE2" / "src",

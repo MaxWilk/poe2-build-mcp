@@ -97,7 +97,8 @@ def scaffold_gear(
     chaos = (after.get("resistances") or {}).get("chaos")
     note = (
         f"Placeholder BASELINE gear to make the build engine-evaluable — NOT real items and "
-        f"NOT optimal. It closed the elemental resistance gaps (toward {target_resist}%) and "
+        f"NOT optimal. It attempted to close the elemental resistance gaps (toward {target_resist}%; "
+        f"re-check resistsAfter) and "
         f"added a {pool} pool. Replace each piece with real drops (search_mods/search_uniques) "
         f"and check cost with get_prices. Weapons/offense are left to you."
     )

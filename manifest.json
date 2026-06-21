@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.29",
+  "version": "0.1.30",
   "description": "Your AI build companion for Path of Exile 2. Import a build for real Path of Building numbers, theorycraft and optimize upgrades, search items, gems, and uniques, and check live prices — every stat computed by the engine, never guessed.",
   "icon": "assets/icon.png",
   "author": {
@@ -84,7 +84,9 @@
     { "name": "explain_mechanic", "description": "Mechanic reference: our principle + attributed wiki page (CC BY-NC-SA)." },
     { "name": "search_mechanics", "description": "Full-text search the bundled wiki mechanics tier." },
     { "name": "relevant_mechanics", "description": "Mechanics worth reading for the active build + the engine damage diagnostic." },
-    { "name": "build_advice", "description": "Evergreen PoE2 build-optimization principles (durable rules)." }
+    { "name": "build_advice", "description": "Evergreen PoE2 build-optimization principles (durable rules)." },
+    { "name": "list_reference_builds", "description": "Browse engine-verified reference builds by archetype — calibration only, never templates." },
+    { "name": "benchmark_build", "description": "Range-check the active build's DPS/EHP against the verified reference set (calibration, not imitation)." }
   ],
   "prompts_generated": true,
   "compatibility": {

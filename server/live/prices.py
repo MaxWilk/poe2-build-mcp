@@ -108,8 +108,6 @@ def get_prices(
                 name = it.get("Text") or it.get("Name") or ""
                 if not q or q in name.lower():
                     results.append({"name": name, "category": cat, "price": it.get("CurrentPrice")})
-            if q and category is None and len(results) >= limit:
-                break
     else:
         raise PriceError(f"unknown kind {kind!r} (use 'currency' or 'unique')")
 

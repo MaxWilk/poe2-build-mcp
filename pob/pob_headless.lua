@@ -212,8 +212,8 @@ end
 
 -- DPS-reading guidance. TotalDPS is ONE hit of the main skill. When FullDPS is materially higher,
 -- that's PoB aggregating hits the single figure omits (overlapping projectiles, secondary/ailment,
--- DoT) — surface it so a multi-hit build (e.g. Spark) isn't under-read ~10x. Falls back to the
--- no-shotgun caution for plain multi-projectile skills where FullDPS isn't elevated.
+-- DoT) — surface it so a multi-hit build isn't under-read ~10x. Whether those hits overlap on
+-- one target (shotgun) is per-skill in PoE2, so the note tells the reader to verify, not assume.
 local function dpsNoteFor(out)
 	out = out or {}
 	local total = tonumber(out.TotalDPS) or 0
@@ -222,18 +222,18 @@ local function dpsNoteFor(out)
 	if total > 0 and full > total * 1.05 then
 		return "FullDPS ("
 			.. math.floor(full + 0.5)
-			.. ") is PoB's COMBINED number — every skill flagged for Full DPS plus secondary hits/"
-			.. "ailments/damage-over-time — and assumes everything lands, so a single-target boss "
-			.. "figure is usually lower. TotalDPS above is just ONE hit of the main skill. PoE2 has no "
-			.. "shotgunning, so do NOT multiply TotalDPS by projectile count; compare builds "
-			.. "like-for-like (FullDPS vs FullDPS)."
+			.. ") is PoB's COMBINED, all-hits-landing number (every skill flagged for Full DPS plus "
+			.. "secondary hits/ailments/damage-over-time) — an UPPER bound. The true single-target figure "
+			.. "is between it and TotalDPS (ONE hit, a lower bound), depending on how many of this skill's "
+			.. "hits/projectiles overlap on one target — PER-SKILL in PoE2, so verify, don't assume "
+			.. "(explain_mechanic/lookup_mechanic/in-game). Compare like-for-like (FullDPS vs FullDPS)."
 	elseif proj > 1 and total > 0 then
 		return "This skill fires "
 			.. proj
-			.. " projectiles. TotalDPS is the single-target figure — PoE2 generally does NOT allow "
-			.. "shotgunning, so do NOT multiply it by projectile count for boss DPS. Extra "
-			.. "projectiles add clear/coverage (and can feed ailments/secondary effects). A few "
-			.. "skills do let projectiles overlap on one target — confirm in-game before assuming."
+			.. " projectiles. TotalDPS is one projectile's hit. Whether projectiles can overlap (shotgun) "
+			.. "on one target is PER-SKILL in PoE2 — some skills allow it, many don't — so don't assume; "
+			.. "verify this skill (explain_mechanic/lookup_mechanic/in-game). Extra projectiles also add "
+			.. "clear/coverage and can feed ailments/secondary effects."
 	end
 	return nil
 end
@@ -257,7 +257,7 @@ local function statResult(keys)
 end
 
 -- PoB's paste parser REQUIRES a trailing instance count on every gem line ("Name L/Q  count"),
--- so a support written "Controlled Destruction 20/20" is silently dropped. Tolerate that by
+-- so a support written "<Support> 20/20" (no count) is silently dropped. Tolerate that by
 -- appending "  1" to any gem line that has level/quality but no count.
 local function normalizeSkillText(text)
 	local lines = {}
@@ -397,7 +397,7 @@ function methods.load_build_xml(p)
 	return { mainSkill = mainSkillName(), stats = collectStats(p.keys) }
 end
 
--- Set the build's MAIN skill from PoB's paste format ("Fireball 20/0  1", one gem per line). This
+-- Set the build's MAIN skill from PoB's paste format ("<Gem> 20/0  1", one gem per line). This
 -- REPLACES the current main socket group (auras/buffs added via add_skill_group are separate groups
 -- and are preserved) so repeated calls don't pile up stale groups. On a parse failure it rolls the
 -- build back and reports, rather than silently leaving a broken/"phantom" main skill.
@@ -415,14 +415,14 @@ function methods.paste_skill(p)
 		return {
 			ok = false,
 			error = "no gem could be parsed from the skill text. Use PoB paste format with ONE GEM "
-				.. "PER LINE — 'Name level/quality count' (e.g. 'Arc 20/20 1') — the main skill "
+				.. "PER LINE — 'Name level/quality count' (e.g. '<gem name> 20/20 1') — the main skill "
 				.. "first and each support on its own line. ' / ', '|' or ',' between gems also work.",
 			mainSkill = mainSkillName(),
 		}
 	end
-	-- The new group was appended at the end. Make it main and REMOVE the previous main group so
-	-- set_skill replaces rather than accumulates (aura/buff groups are untouched).
-	local newIndex = #list
+	-- The new main skill is the FIRST group the paste appended; make it main and REMOVE the previous
+	-- main group so set_skill replaces rather than accumulates (aura/buff groups are untouched).
+	local newIndex = before + 1
 	if prevMain and prevMain >= 1 and prevMain <= before and prevMain ~= newIndex then
 		table.remove(list, prevMain)
 		if newIndex > prevMain then
@@ -435,7 +435,7 @@ function methods.paste_skill(p)
 	end
 	-- Compute FullDPS for the main skill (PoB only rolls it up for groups flagged "include in Full
 	-- DPS"; off by default). This makes the realistic multi-hit/overlap number available from scratch
-	-- for projectile skills like Spark, where TotalDPS (one hit) badly under-reads the build.
+	-- for multi-projectile/multi-hit skills, where TotalDPS (one hit) badly under-reads the build.
 	if list[newIndex] then
 		list[newIndex].includeInFullDPS = true
 	end
@@ -455,9 +455,9 @@ function methods.paste_skill(p)
 	return statResult(p.keys)
 end
 
--- Add an ENABLED secondary socket group (an aura/herald/buff like Wrath or Archmage, or a second
+-- Add an ENABLED secondary socket group (an aura/herald/reservation buff, or a second
 -- skill) WITHOUT changing the main skill, so its buff/reservation applies to the active build.
--- This is how caster damage layers (auras, Archmage mana-stacking) get modelled.
+-- This is how caster damage layers (auras, reservation/mana-scaling buffs) get modelled.
 function methods.add_skill_group(p)
 	assert(p and p.text, "add_skill_group requires params.text")
 	local list = build.skillsTab.socketGroupList
@@ -466,8 +466,10 @@ function methods.add_skill_group(p)
 	build.skillsTab:PasteSocketGroup(normalizeSkillText(p.text))
 	-- Optionally include a second DAMAGE skill in FullDPS (clear+boss, triggers). Off by default so
 	-- auras/heralds/buffs don't inflate the combined number.
-	if p.includeInFullDPS and #list > before then
-		list[#list].includeInFullDPS = true
+	if p.includeInFullDPS then
+		for i = before + 1, #list do
+			list[i].includeInFullDPS = true
+		end
 	end
 	runCallback("OnFrame")
 	-- keep the existing main skill; the new group stays enabled and applies its effect
@@ -622,6 +624,22 @@ function methods.list_jewel_sockets()
 	return { sockets = out }
 end
 
+-- equipItemRaw only places a jewel in its socket slot; it does NOT register it in the passive
+-- spec's socket->jewel map (which is otherwise built only on build load), and nothing rebuilds the
+-- tree paths afterwards. So a socketed jewel's TREE-modifying effects (alternate class starts,
+-- radius/cluster/timeless grants) silently never apply, and optimize_passives/alloc_passive don't
+-- see the pathing it opens. Sync the map from the slot for `socket`, then rebuild paths.
+local function syncJewelSocket(socket)
+	local sc = build.itemsTab.slots["Jewel " .. tostring(socket)]
+	local jid = sc and sc.selItemId
+	if jid and jid ~= 0 and build.itemsTab.items[jid] then
+		build.spec.jewels[socket] = jid
+	else
+		build.spec.jewels[socket] = nil
+	end
+	build.spec:BuildAllDependsAndPaths()
+end
+
 -- Place a jewel (raw PoB item text) into a tree jewel socket. p.socket is a socket id from
 -- list_jewel_sockets; if omitted, the first ALLOCATED empty socket is used. A jewel in an
 -- unallocated socket does nothing, so we warn instead of silently wasting it.
@@ -669,6 +687,7 @@ function methods.equip_jewel(p)
 				.. "under the name.",
 		}
 	end
+	syncJewelSocket(socket) -- register the jewel in the tree + rebuild paths (see helper above)
 	runCallback("OnFrame")
 	local node = spec.nodes[socket]
 	local r = { ok = true, socket = socket, stats = collectStats(p.keys) }
@@ -711,6 +730,11 @@ function methods.unequip_item(p)
 	end
 	sc:SetSelItemId(0)
 	build.buildFlag = true
+	-- If this was a jewel socket, drop it from the tree map + rebuild paths so its effects go away.
+	local jewelSocket = tostring(slot):match("^Jewel (%d+)$")
+	if jewelSocket then
+		syncJewelSocket(tonumber(jewelSocket))
+	end
 	runCallback("OnFrame")
 	return { ok = true, slot = slot, stats = collectStats(p.keys) }
 end
@@ -1185,7 +1209,13 @@ function methods.optimize_passives(p)
 		requiredPoints = requiredSpent,
 		allocated = chosen,
 	}
-	if budget > 5 then
+	if used - requiredSpent == 0 and budget > 0 then
+		result.note = "The optimizer allocated NOTHING — no reachable node improved the goal, though "
+			.. budget
+			.. " points are available. Likely the metric doesn't scale off the passive tree for this "
+			.. "skill (e.g. an uncomputable / placeholder-damage skill — verify with explain_mechanic "
+			.. "/ relevant_mechanics), or the reachable nodes simply don't move this goal."
+	elseif budget > 5 then
 		result.note = budget
 			.. " points still unspent — no remaining notable or small node improved the goal from "
 			.. "here. Try different goals/weights, a different node_type, or alloc_passive toward a "

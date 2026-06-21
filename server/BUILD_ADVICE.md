@@ -50,7 +50,7 @@ core multiplier**, not more small increases. Work in this order:
 
 1. **Find THIS build's dominant multiplier and verify it with `rank_levers` — don't assume.**
    Archetypes scale on different things; measure, don't reach for a favorite. The dominant lever
-   varies: it might be **crit** (chance × multi can be 3–7× — a meta Comet nuke runs ~98%/7×), a big
+   varies: it might be **crit** (chance × multi can be 3–7× — a meta crit nuke can run ~98% crit / 7× multi), a big
    **"more"-multiplier** support stack, **ailment/DoT** (poison/ignite/bleed, or shock far exceeding
    its 20% base), **minions**, **"+levels to skills"**, or **penetration/exposure**. There's no
    universal answer — crit and mana-stacking are each just *one* option. Put whatever `rank_levers`
@@ -60,13 +60,14 @@ core multiplier**, not more small increases. Work in this order:
    OR a non-crit lane (a "more"-multiplier stack, ailment/DoT, or minions). Don't half-do crit, and
    don't bolt crit onto a skill/ascendancy that doesn't support it. Which lane is right depends on
    the skill, ascendancy, and goal — not a default.
-3. **Match the skill to the goal — boss vs farm are different skills.** A slow, high-crit nuke (e.g.
-   *Comet*), often triggered by **Cast on Critical**, is the single-target BOSS engine; a fast
-   multi-projectile (e.g. *Spark*) is the CLEAR/farm engine. Don't optimize the clear skill for boss
-   DPS — the meta runs a different skill for each.
+3. **Match the skill to the goal — boss vs farm are often different skills.** A slow, high-damage
+   nuke (sometimes triggered by a crit/ailment trigger meta-gem) tends to be the single-target BOSS
+   engine; a fast multi-projectile or wide-AoE skill tends to be the CLEAR/farm engine. Don't
+   optimize the clear skill for boss DPS — strong setups often run a different skill for each. The
+   right skill is the player's call (or their stated goal); don't default to a particular one.
 4. **Stack the build's defining resource.** For a crit caster that's crit + the hit's base damage +
    cast rate; for a mana-stacker it's ES/mana via **Eldritch Battery + Mind over Matter** (one stat
-   becomes both damage *and* EHP). Mana/Archmage is ONE layer, **not automatically the master
+   becomes both damage *and* EHP). Mana-stacking is ONE layer, **not automatically the master
    lever** — `rank_levers` tells you which actually moves *this* build.
 5. **Don't skip jewels.** Real endgame builds run **8–10 jewels**, including unique/timeless ones
    (Voices, Megalomaniac, From Nothing, Time-Lost) that supply huge passive/notable density — that's
@@ -78,21 +79,53 @@ A useful sanity check: realistic gear should reach high six figures on a strong 
 engine shows far less, suspect either a missing core multiplier (above) or that a mechanic isn't
 being modeled — note the latter rather than trusting the low number.
 
-**Measure the right number, with the fight realistic.** For multi-projectile/overlap skills (e.g.
-Spark) read **FullDPS** (PoB's combined figure), not the per-hit `TotalDPS` — and compare builds
-like-for-like (FullDPS↔FullDPS, never one's TotalDPS vs another's FullDPS). The engine's enemy
+**Measure the right number, with the fight realistic.** For multi-projectile/multi-hit skills read
+**FullDPS** (PoB's combined, all-hits-landing figure) alongside the per-hit `TotalDPS`. The true
+single-target number is between them and depends on **how many of the skill's hits/projectiles can
+overlap on one target — which is per-skill in PoE2** (some skills shotgun, many don't): don't assume,
+verify the specific skill (`explain_mechanic`/`lookup_mechanic`/in-game). Compare builds like-for-like
+(same metric — FullDPS↔FullDPS, never one's TotalDPS vs another's FullDPS). The engine's enemy
 conditions are **off by default**, so a bare stat read understates a real fight: use
 `apply_combat_profile` to switch on the shock/curse/charges/boss-tier the build actually maintains
 before judging DPS (turn off any it can't sustain — they'd inflate the number). The mana *pool*
-isn't automatically the master lever: some real meta million-DPS builds (e.g. Comet/Cast-on-Critical,
-crit Spark) run only ~6–8k mana and get most of their damage from **crit + the hit + chase jewels**,
-not pool size — but that's *those* builds, not a rule (ailment/DoT/minion builds scale elsewhere).
-Never assume one recipe; let `rank_levers` find what actually moves *this* build.
+isn't automatically the master lever: some real meta million-DPS builds run only ~6–8k mana and get
+most of their damage from **crit + the hit + chase jewels**, not pool size — but that's *those*
+builds, not a rule (ailment/DoT/minion builds scale elsewhere). Never assume one recipe; let
+`rank_levers` find what actually moves *this* build.
 **To chase a specific meta build, import its PoB** (`import_build`) and read its keystones, crit,
-skill (incl. trigger like Cast on Critical), and jewels — then build to that archetype and verify
+skill (including any trigger/meta-gem), and jewels — then build to that archetype and verify
 each layer on the engine; `compare_to` shows the per-stat gap. When the build looks done, gate it
 with `pinnacle_readiness` (resists + chaos + EHP + DPS) — note real ~1M-DPS builds run only
 ~17–20k EHP and survive on Mageblood + charms + dodge, so breadth/recovery beats a huge pool.
+
+## What verified endgame builds scale on — calibrate, don't copy
+
+Distilled from a diverse set of engine-VERIFIED high-end builds (the reference library:
+`list_reference_builds` / `benchmark_build`). These describe *how strong builds scale*, not *what to
+play* — they name no skill on purpose. Reference builds are **calibration only**: use them to
+range-check a number and spot the dominant lever; never copy or recommend one wholesale — build to
+the player's stated goal.
+
+- **"+levels to skills" is the universal #1 damage lever.** Across every computable reference build —
+  spell, attack, projectile, minion, and ailment alike — the highest-value marginal lever is *+to
+  Level of all (relevant) Skills*. Chase it first and from every source (gem level/quality, `+to
+  Level of all [type] Skills` on weapon/amulet/focus, level-granting uniques/supports), then
+  fine-tune. Confirm with `rank_levers`; a *high* marginal % there means it's still under-invested
+  (headroom), not that it stopped mattering.
+- **The rest of the hierarchy is stable:** after +levels → **penetration/exposure** (once you've
+  committed to one element vs resistant bosses) → **"more" multipliers** (supports; ~1:1 with DPS) →
+  **flat `+%` critical damage bonus** (broadly useful even on "non-crit" builds) → **rate**
+  (attack-speed XOR cast-speed, whichever the skill uses). *"Increased" damage is near the bottom on
+  a finished build* — it diminishes fast; spend on the multipliers above it.
+- **Defense = convert one resource into both damage and EHP.** Strong builds pick one identity and
+  commit: **ES via Chaos Inoculation** (life→1, chaos-immune; tankiest, can exceed 30k EHP), **mana
+  via Eldritch Battery + Mind over Matter** (mana is the hit-buffer and often the damage), or **life +
+  Mind over Matter**. Plain life/ES hybrid is fine for attack builds. Pick one and stop paying for the
+  stats it doesn't use.
+- **The verified endgame bar:** finished single-target builds cluster around **~1M+ DPS** (≈1M–6M) at
+  **~20–35k EHP** (CI/ES stackers higher), resists capped, chaos handled (capped or CI). Most run
+  modest pools + recovery + dodge, not a huge HP bar. Use `benchmark_build` to see where the active
+  build sits; if it's an order of magnitude short, a *multiplier* is missing (above), not margins.
 
 ## Defense: the survival checklist
 
