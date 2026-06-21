@@ -57,10 +57,8 @@ jobs:
 
       - name: Check out pinned PoB + apply fork patches
         run: |
-          git init -q pob/PathOfBuilding-PoE2
-          git -C pob/PathOfBuilding-PoE2 remote add origin https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git
-          git -C pob/PathOfBuilding-PoE2 fetch -q --depth 1 origin ${{ env.POB_COMMIT }}
-          git -C pob/PathOfBuilding-PoE2 checkout -q FETCH_HEAD
+          git clone --filter=blob:none --no-checkout https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+          git -C pob/PathOfBuilding-PoE2 checkout -q ${{ env.POB_COMMIT }}
           (cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
 
       - run: uv sync
@@ -88,10 +86,8 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y luajit zip
       - name: Check out pinned PoB + apply fork patches
         run: |
-          git init -q pob/PathOfBuilding-PoE2
-          git -C pob/PathOfBuilding-PoE2 remote add origin https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git
-          git -C pob/PathOfBuilding-PoE2 fetch -q --depth 1 origin ${{ env.POB_COMMIT }}
-          git -C pob/PathOfBuilding-PoE2 checkout -q FETCH_HEAD
+          git clone --filter=blob:none --no-checkout https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+          git -C pob/PathOfBuilding-PoE2 checkout -q ${{ env.POB_COMMIT }}
           (cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
       - run: uv sync && uv run python -m pipeline.build_corpus
 

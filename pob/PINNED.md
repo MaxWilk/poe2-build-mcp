@@ -16,12 +16,13 @@ git submodule pinned to the commit below.
 ## Reproduce the working copy
 
 ```sh
-# Fetch the EXACT pinned commit (below), not the moving `dev` tip — reproducible + matches CI.
-git init pob/PathOfBuilding-PoE2
-git -C pob/PathOfBuilding-PoE2 remote add origin \
-  https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git
-git -C pob/PathOfBuilding-PoE2 fetch --depth 1 origin a82a33b
-git -C pob/PathOfBuilding-PoE2 checkout FETCH_HEAD
+# Check out the EXACT pinned commit (below), not the moving `dev` tip — reproducible + matches CI.
+# A blobless clone keeps the full commit graph cheaply, so the pinned SHA stays reachable even
+# after dev advances (GitHub refuses a shallow fetch of an unadvertised SHA).
+git clone --filter=blob:none --no-checkout \
+  https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git \
+  pob/PathOfBuilding-PoE2
+git -C pob/PathOfBuilding-PoE2 checkout a82a33b
 # then apply our tracked fork patches (see "Local patches" below)
 (cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
 ```
