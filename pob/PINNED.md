@@ -22,9 +22,10 @@ git submodule pinned to the commit below.
 git clone --filter=blob:none --no-checkout \
   https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git \
   pob/PathOfBuilding-PoE2
+git -C pob/PathOfBuilding-PoE2 config core.autocrlf false   # keep LF so the LF patch applies on Windows
 git -C pob/PathOfBuilding-PoE2 checkout a82a33b
 # then apply our tracked fork patches (see "Local patches" below)
-(cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
+(cd pob/PathOfBuilding-PoE2 && git apply --ignore-whitespace ../patches/*.patch)
 ```
 
 ## Local patches

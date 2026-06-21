@@ -56,10 +56,12 @@ jobs:
           cp src/luajit.exe src/lua51.dll "$dest/"
 
       - name: Check out pinned PoB + apply fork patches
+        shell: bash # Windows runners default run: to pwsh, which won't glob ../patches/*.patch
         run: |
           git clone --filter=blob:none --no-checkout https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+          git -C pob/PathOfBuilding-PoE2 config core.autocrlf false # keep LF so the LF patch applies on Windows
           git -C pob/PathOfBuilding-PoE2 checkout -q ${{ env.POB_COMMIT }}
-          (cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
+          (cd pob/PathOfBuilding-PoE2 && git apply --ignore-whitespace ../patches/*.patch)
 
       - run: uv sync
       - run: uv run ruff check server scripts pipeline tests
@@ -85,10 +87,12 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: sudo apt-get update && sudo apt-get install -y luajit zip
       - name: Check out pinned PoB + apply fork patches
+        shell: bash # Windows runners default run: to pwsh, which won't glob ../patches/*.patch
         run: |
           git clone --filter=blob:none --no-checkout https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git pob/PathOfBuilding-PoE2
+          git -C pob/PathOfBuilding-PoE2 config core.autocrlf false # keep LF so the LF patch applies on Windows
           git -C pob/PathOfBuilding-PoE2 checkout -q ${{ env.POB_COMMIT }}
-          (cd pob/PathOfBuilding-PoE2 && git apply ../patches/*.patch)
+          (cd pob/PathOfBuilding-PoE2 && git apply --ignore-whitespace ../patches/*.patch)
       - run: uv sync && uv run python -m pipeline.build_corpus
 
       - name: Assemble update payload + manifest
