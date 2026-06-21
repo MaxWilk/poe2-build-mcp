@@ -15,9 +15,13 @@ together and how to avoid the common mistakes.
 3. **Ground everything in real data.** Gear comes from real mods (`optimize_item`, `search_mods`),
    never invented affixes. When unsure how a mechanic/keystone/skill works, **look it up first**
    (`explain_mechanic` / `lookup_mechanic`) — guessing wastes turns.
-4. **When DPS is far short of endgame, find the missing *multiplier*, don't tweak margins.** A
-   build missing its core scaler (e.g. an Archmage build with little mana) is *un-built*, not weak.
-   See `build_advice("Reaching endgame DPS")`.
+4. **When DPS is far short of endgame, find the missing *multiplier*, don't tweak margins.** For
+   single-target/boss DPS the dominant multiplier is usually **crit** (a real meta nuke runs ~98%
+   crit / 7× multi — a non-crit build forgoes that 3–7×). Verify the actual lever with `rank_levers`;
+   don't assume mana-stacking is the answer. The fastest way to chase a meta build is to
+   `import_build` a known PoB and copy its archetype — skill (+ trigger like Cast on Critical),
+   crit, keystones, jewels — then verify each layer on the engine. See
+   `build_advice("Reaching endgame DPS")`.
 5. **Re-check `get_defenses` after every gear change.** Resists silently break caps when you
    reshuffle gear for damage — never trade a cap for DPS without noticing.
 6. **Don't call a build "done" or "viable" without the gate.** Set explicit goals (anchored to the

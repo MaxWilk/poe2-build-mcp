@@ -436,15 +436,16 @@ def evaluate_build(goals: dict[str, Any]) -> dict[str, Any]:
 
 
 @mcp.tool()
-def pinnacle_readiness(min_ehp: float = 25000, min_dps: float = 500000) -> dict[str, Any]:
+def pinnacle_readiness(min_ehp: float = 20000, min_dps: float = 500000) -> dict[str, Any]:
     """Gate a build against the endgame/pinnacle checklist — defense beyond raw EHP, plus a DPS bar.
 
     Engine-computed pass/fail for: elemental resists capped, chaos handled (capped OR Chaos
     Inoculation), a resist over-cap buffer (advisory, vs penetration/curses), EHP ≥ `min_ehp`, and
-    DPS ≥ `min_dps` (uses FullDPS when higher). `min_ehp`/`min_dps` default to a generic pinnacle
-    bar — set them to the player's actual content. `pass` covers the critical criteria; the buffer
-    is advisory. Verify recovery (regen/leech/recoup), ailment/stun handling, and DPS uptime
-    in-game — those aren't fully captured by static numbers.
+    DPS ≥ `min_dps` (uses FullDPS when higher). Defaults are a generic pinnacle bar — set them to the
+    player's content. (For reference, real imported ~1M-DPS pinnacle builds often run only ~17–20k
+    EHP and lean on Mageblood + charms + dodge, so EHP breadth/recovery matters more than a huge
+    pool.) `pass` covers the critical criteria; the buffer is advisory. Verify recovery
+    (regen/leech/recoup), ailment/stun handling, and DPS uptime in-game.
     """
     eng = get_engine()
     d = eng.get_defenses()

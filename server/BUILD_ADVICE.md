@@ -48,20 +48,28 @@ plainly; never present a skeleton as "done".
 Endgame content assumes very high DPS. If a build is far short, the fix is usually a **missing
 core multiplier**, not more small increases. Work in this order:
 
-1. **Identify the skill's core scaler and confirm it's actually present.** Look it up if unsure
-   (`explain_mechanic`/`lookup_mechanic`). E.g. *Archmage* adds lightning damage based on **maximum
-   mana** — so a mana pool is the whole engine; an Archmage build with a small mana pool is
-   un-built, not weak. Put the core engine in before fine-tuning gear.
-2. **Stack the defining resource hard.** For mana-stackers, the trivial multiplier is
-   **Eldritch Battery + Mind over Matter**: EB converts energy shield into mana, MoM makes mana
-   absorb damage before life — so **one stat (ES/mana) becomes both your damage and your EHP**, and
-   stacking it scales both at once (no defense trade-off). Most archetypes have an equivalent
-   "universal stat" — find it.
-3. **Layer the multipliers** — they multiply: more "+levels to skills" (often the single biggest
-   lever; verify with `rank_levers`), "more" supports, crit (needs *base* crit — "increased" crit
-   does nothing from zero, and some supports zero base crit), ailment magnitude (shock can far
-   exceed its 20% base), penetration/exposure vs the boss's resistance.
-4. **Re-verify defense after each big swing.** Resists drift and silently break caps when you
+1. **Find the DOMINANT multiplier and verify it with `rank_levers` — don't assume.** Archetypes
+   scale on different things; measure, don't guess. For most single-target BOSS builds the dominant
+   multiplier is **crit** (crit chance × crit multi can be **3–7×** — a real meta Comet build runs
+   ~98% crit / 7× multi). Other big levers: "+levels to skills", "more" supports, ailment magnitude
+   (shock far exceeds its 20% base), penetration/exposure. Put the dominant lever in *before*
+   fine-tuning gear, and look the skill up if unsure (`explain_mechanic`/`lookup_mechanic`).
+2. **Commit to crit unless you have a deliberate non-crit package.** Crit is usually the biggest
+   single multiplier, so going non-crit (e.g. Controlled Destruction) *forgoes* it — only do that if
+   a "more"-multiplier package makes up for the loss. Crit needs BOTH halves (chance + multi) and a
+   *base*-crit source; "increased" crit does nothing from zero, and some supports zero base crit.
+3. **Match the skill to the goal — boss vs farm are different skills.** A slow, high-crit nuke (e.g.
+   *Comet*), often triggered by **Cast on Critical**, is the single-target BOSS engine; a fast
+   multi-projectile (e.g. *Spark*) is the CLEAR/farm engine. Don't optimize the clear skill for boss
+   DPS — the meta runs a different skill for each.
+4. **Stack the build's defining resource.** For a crit caster that's crit + the hit's base damage +
+   cast rate; for a mana-stacker it's ES/mana via **Eldritch Battery + Mind over Matter** (one stat
+   becomes both damage *and* EHP). Mana/Archmage is ONE layer, **not automatically the master
+   lever** — `rank_levers` tells you which actually moves *this* build.
+5. **Don't skip jewels.** Real endgame builds run **8–10 jewels**, including unique/timeless ones
+   (Voices, Megalomaniac, From Nothing, Time-Lost) that supply huge passive/notable density — that's
+   often why a meta tree reads "over budget". `list_jewel_sockets` / `equip_jewel`.
+6. **Re-verify defense after each big swing.** Resists drift and silently break caps when you
    reshuffle gear for damage — re-check `get_defenses` every time.
 
 A useful sanity check: realistic gear should reach high six figures on a strong archetype; if the
@@ -74,11 +82,14 @@ like-for-like (FullDPS↔FullDPS, never one's TotalDPS vs another's FullDPS). Th
 conditions are **off by default**, so a bare stat read understates a real fight: use
 `apply_combat_profile` to switch on the shock/curse/charges/boss-tier the build actually maintains
 before judging DPS (turn off any it can't sustain — they'd inflate the number). The mana *pool*
-isn't automatically the master lever: a real Archmage **Spark** meta build runs only ~2k mana and
-gets most of its damage from projectiles + penetration + curses, not pool size — let `rank_levers`
-find the lever that actually moves *this* build. Don't skip **jewels** (`list_jewel_sockets` /
-`equip_jewel`): mana/ES/damage stat jewels are a meaningful chunk of a stacker's power. When the
-build looks done, gate it with `pinnacle_readiness` (resists + chaos + EHP + DPS), not raw EHP alone.
+isn't automatically the master lever: real meta million-DPS builds (Comet/Cast-on-Critical for
+bossing, crit Spark for farm) run only ~6–8k mana and get most of their damage from **crit + the
+hit + chase jewels**, not pool size — let `rank_levers` find what actually moves *this* build.
+**To chase a specific meta build, import its PoB** (`import_build`) and read its keystones, crit,
+skill (incl. trigger like Cast on Critical), and jewels — then build to that archetype and verify
+each layer on the engine; `compare_to` shows the per-stat gap. When the build looks done, gate it
+with `pinnacle_readiness` (resists + chaos + EHP + DPS) — note real ~1M-DPS builds run only
+~17–20k EHP and survive on Mageblood + charms + dodge, so breadth/recovery beats a huge pool.
 
 ## Defense: the survival checklist
 

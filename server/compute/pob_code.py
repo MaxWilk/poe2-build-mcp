@@ -50,9 +50,25 @@ def decode_code(code: str) -> str:
         raise PobCodeError(f"invalid base64 in import code: {e}") from e
     try:
         xml = zlib.decompress(raw)
-    except zlib.error as e:
-        raise PobCodeError(f"invalid deflate stream in import code: {e}") from e
-    return xml.decode("utf-8")
+    except zlib.error:
+        # Long codes pasted into chat commonly lose or alter the final character(s), corrupting only
+        # the trailing Adler-32 checksum while the deflate body itself is intact. Recover by
+        # decompressing without verifying the checksum (drop the final 4 bytes so it isn't checked).
+        try:
+            d = zlib.decompressobj()
+            xml = d.decompress(raw[:-4]) + d.flush()
+        except zlib.error as e2:
+            raise PobCodeError(
+                "import code is corrupted — the compressed data didn't decode. Re-copy the FULL "
+                "code (long codes often get cut off when pasted), or share a pobb.in/pastebin link."
+            ) from e2
+    text = xml.decode("utf-8", "replace")
+    if "PathOfBuilding" not in text:
+        raise PobCodeError(
+            "decoded data isn't a Path of Building build — re-copy the full code, or share a "
+            "pobb.in/pastebin link."
+        )
+    return text
 
 
 def encode_code(xml: str) -> str:

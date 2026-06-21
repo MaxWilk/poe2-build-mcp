@@ -75,3 +75,24 @@ def test_coerce_to_xml_html_vs_xml_vs_code():
     assert pob_code._coerce_to_xml(xml, "x") == xml
     code = pob_code.encode_code('<PathOfBuilding2><Build level="1"/></PathOfBuilding2>')
     assert "PathOfBuilding2" in pob_code._coerce_to_xml(code, "x")
+
+
+def test_decode_recovers_corrupted_trailing_checksum():
+    # Long codes pasted into chat commonly corrupt only the trailing Adler-32 checksum while the
+    # deflate body is intact — decode must still recover the build (the real fix from the meta import).
+    import base64
+    import zlib
+
+    xml = '<?xml version="1.0"?><PathOfBuilding2><Build level="1"/></PathOfBuilding2>'
+    raw = bytearray(zlib.compress(xml.encode(), 9))
+    raw[-1] ^= 0xFF  # corrupt the trailing checksum only
+    code = base64.b64encode(bytes(raw)).decode().replace("+", "-").replace("/", "_")
+    assert "PathOfBuilding2" in pob_code.decode_code(code)
+
+
+def test_decode_rejects_unrecoverable_data():
+    import base64
+
+    junk = base64.b64encode(b"this is not a zlib stream at all, just plain bytes" * 4).decode()
+    with pytest.raises(pob_code.PobCodeError):
+        pob_code.decode_code(junk)
