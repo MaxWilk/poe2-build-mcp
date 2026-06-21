@@ -504,3 +504,124 @@ def optimize_jewel(
         out["metricBefore"] = _round2(base_stats.get(metric))
         out["metricAfter"] = _round2(final_stats.get(metric))
     return out
+
+
+_OFFENSE_SLOTS = ("Weapon 1", "Amulet", "Gloves", "Ring 1")
+_DEFENSE_SLOTS = ("Body Armour", "Helmet", "Boots", "Belt", "Ring 2", "Weapon 2")
+
+
+def _marginal_craft(
+    engine: PobEngine, slot: str, base: str, weights: dict[str, float], rolls: str
+) -> str | None:
+    """Fast per-slot craft: rank each affix by its marginal weighted gain (TWO batched evals — bare
+    base, then all single-affix candidates), then take the top 3 prefix + 3 suffix (group-exclusive).
+    Approximate (ignores affix interaction) but ~6x cheaper than the full greedy — used by plan_gear
+    so a whole-set plan fits in one call."""
+    pool = db.affix_pool(base)
+    pre, suf = pool["prefixes"], pool["suffixes"]
+    if not pre and not suf:
+        return None
+    keys = list(weights)
+    meta = [(m, _roll(m["text"], rolls)) for m in pre + suf]
+    base_res = engine.eval_items(slot, [_item_text(base, [], slot)], keys=keys)["results"]
+    base_stats = base_res[0] if base_res and isinstance(base_res[0], dict) else {}
+    denom = {k: max(abs(base_stats.get(k) or 0.0), 1.0) for k in keys}
+    results = engine.eval_items(slot, [_item_text(base, [ln], slot) for _m, ln in meta], keys=keys)[
+        "results"
+    ]
+    scored: list[tuple[float, dict[str, Any], str]] = []
+    for (m, line), st in zip(meta, results):
+        st = st if isinstance(st, dict) else {}
+        gain = sum(
+            w * ((st.get(k) or 0.0) - (base_stats.get(k) or 0.0)) / denom[k]
+            for k, w in weights.items()
+        )
+        scored.append((gain, m, line))
+    chosen_lines: list[str] = []
+    used: set[str] = set()
+    for typ in ("prefix", "suffix"):
+        side = sorted((s for s in scored if s[1]["type"] == typ), key=lambda x: -x[0])
+        n = 0
+        for gain, m, line in side:
+            if n >= 3:
+                break
+            if gain <= 1e-9 or m["group"] in used:
+                continue
+            chosen_lines.append(line)
+            used.add(m["group"])
+            n += 1
+    return _item_text(base, chosen_lines, slot) if chosen_lines else None
+
+
+def plan_gear(
+    engine: PobEngine,
+    dps_weight: float = 0.7,
+    rolls: str = "realistic",
+    slots: list[str] | None = None,
+) -> dict[str, Any]:
+    """Plan a whole gear set that maximizes damage while capping resists (budget-allocation heuristic).
+
+    The cross-slot trade-off: there are only so many suffix slots for resistances, so put them where
+    they cost the least damage. This crafts OFFENSE slots damage-leaning and DEFENSE slots EHP-leaning
+    (which naturally pulls the missing resists onto the defensive pieces), building each slot on top
+    of the previous so the plan is coherent — not the order-independent, per-slot view of
+    rank_upgrades. Read-only: returns the per-slot plan + the projected whole-build DPS/EHP/resists;
+    equip the items yourself. Greedy heuristic, not a global optimum.
+    """
+    dps_weight = min(max(float(dps_weight), 0.0), 1.0)
+    off_goal = (
+        {"TotalDPS": dps_weight, "TotalEHP": round(1.0 - dps_weight, 3)}
+        if dps_weight < 1.0
+        else {"TotalDPS": 1.0}
+    )
+    def_goal = {"TotalEHP": 0.8, "TotalDPS": 0.2}
+    order = list(slots) if slots else list(_OFFENSE_SLOTS) + list(_DEFENSE_SLOTS)
+    gear = engine.get_build().get("gear") or {}
+
+    snapshot = engine.get_xml()
+    plan: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    try:
+        for slot in order:
+            cur = gear.get(slot)
+            if not (isinstance(cur, dict) and cur.get("base")):
+                skipped.append({"slot": slot, "reason": "empty (no base) — equip a base first"})
+                continue
+            base = cur["base"]
+            goal = off_goal if slot in _OFFENSE_SLOTS else def_goal
+            item = _marginal_craft(engine, slot, base, goal, rolls)
+            if not item:
+                skipped.append({"slot": slot, "reason": "no improving affix in pool"})
+                continue
+            engine.add_item(item, slot=slot)  # persist so the next slot is crafted coherently
+            affixes = [ln for ln in item.split("--------\n")[-1].split("\n") if ln.strip()]
+            plan.append({"slot": slot, "item": item, "affixes": affixes})
+        stats = engine.get_stats(["TotalDPS", "FullDPS"])["stats"]
+        d = engine.get_defenses()
+    finally:
+        engine.load_build_xml(snapshot)
+
+    res = d.get("resistances") or {}
+    missing = d.get("resistMissing") or {}
+    res_capped = all((missing.get(e) or 0) <= 0 for e in _RES_KEYS)
+    chaos_capped = (res.get("chaos") or 0) >= 75
+    return {
+        "ok": True,
+        "plan": plan,
+        "skipped": skipped,
+        "projected": {
+            "TotalDPS": _round2(stats.get("TotalDPS")),
+            "FullDPS": _round2(stats.get("FullDPS")),
+            "TotalEHP": _round2(d.get("totalEHP")),
+            "resistances": res,
+            "resistsCapped": res_capped,
+            "chaosCapped": chaos_capped,
+        },
+        "note": (
+            "Budget-allocation heuristic: offense slots crafted damage-leaning, defense slots EHP-"
+            "leaning (which pulls missing resists onto the cheapest-DPS pieces), built slot-by-slot so "
+            "it's coherent. If resists still aren't capped, lower dps_weight or add resistance on a "
+            "ring/amulet. Read-only — equip the plan's items with equip_item. Greedy, not a global "
+            "optimum."
+        ),
+    }

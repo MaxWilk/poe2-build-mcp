@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.34",
+  "version": "0.1.35",
   "description": "Your AI build companion for Path of Exile 2. Import a build for real Path of Building numbers, theorycraft and optimize upgrades, search items, gems, and uniques, and check live prices — every stat computed by the engine, never guessed.",
   "icon": "assets/icon.png",
   "author": {
@@ -57,6 +57,7 @@
     { "name": "rank_upgrades", "description": "Rank gear slots by how much recrafting each would gain — what to upgrade next." },
     { "name": "optimize_supports", "description": "Pick the best support-gem set for the active skill (engine-measured, since the corpus has no support magnitudes)." },
     { "name": "optimize_jewel", "description": "Craft the best-in-slot rare jewel for the active build (marginal-ranked; socket with equip_jewel)." },
+    { "name": "plan_gear", "description": "Plan a whole gear set that maximizes damage while capping resistances (cross-slot budget allocation)." },
     { "name": "search_items", "description": "Search item bases." },
     { "name": "find_skills", "description": "Find skill/support gems." },
     { "name": "get_gem", "description": "Get a gem's details." },

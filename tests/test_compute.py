@@ -391,6 +391,32 @@ def test_optimize_jewel_crafts_damage_jewel(engine):
     assert engine.get_build()["mainSkill"] == "Lightning Spear"  # read-only
 
 
+def test_plan_gear_caps_resists_while_keeping_damage(engine):
+    # Cross-slot budget allocation: offense slots damage-leaning, defense slots EHP-leaning (which
+    # pulls resists onto the cheapest-DPS pieces). Read-only; returns a coherent whole-set plan.
+    from server import scaffold
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nX\nGrand Spear\n--------\nAdds 100 to 200 Lightning Damage", slot="Weapon 1"
+    )
+    scaffold.scaffold_gear(engine, pool="life", target_resist=75)  # bases to plan over
+    r = itemopt.plan_gear(
+        engine,
+        dps_weight=0.7,
+        slots=["Amulet", "Body Armour", "Helmet", "Boots", "Belt", "Ring 2"],
+    )
+    assert r["ok"] and r["plan"]
+    pj = r["projected"]
+    assert pj["resistsCapped"] is True  # defense slots pull resists to cap
+    assert isinstance(pj["TotalDPS"], (int, float))
+    assert engine.get_build()["mainSkill"] == "Lightning Spear"  # read-only: build restored
+
+
 def test_new_build_resets(engine):
     # new_build clears gear/skills so a from-scratch build doesn't inherit a prior one's state.
     engine.new_build()

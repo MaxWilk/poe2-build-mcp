@@ -778,6 +778,25 @@ def optimize_jewel(
     return itemopt.optimize_jewel(get_engine(), metric=metric, base=base, goals=goals, rolls=rolls)
 
 
+@mcp.tool()
+def plan_gear(
+    dps_weight: float = 0.7,
+    rolls: str = "realistic",
+    slots: list[str] | None = None,
+) -> dict[str, Any]:
+    """Plan a whole gear set that maximizes damage while capping resistances (budget allocation).
+
+    The cross-slot trade-off: limited suffix slots for resistances, so put them where they cost the
+    least damage. This crafts OFFENSE slots damage-leaning and DEFENSE slots EHP-leaning (which pulls
+    the missing resists onto the defensive pieces), building each slot on the previous so the plan is
+    coherent. `dps_weight` (0..1) tilts the offense slots. Returns the per-slot plan + projected
+    whole-build DPS/EHP/resists (+ whether capped); equip the items yourself with equip_item. Slots
+    need a base equipped (scaffold_gear first for a skeleton). A heavier call (~10s); greedy
+    heuristic, not a global optimum — refine individual slots with optimize_item.
+    """
+    return itemopt.plan_gear(get_engine(), dps_weight=dps_weight, rolls=rolls, slots=slots)
+
+
 def _server_version() -> str:
     """The installed server (code) version, read from the bundled manifest."""
     try:
