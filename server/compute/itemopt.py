@@ -385,3 +385,122 @@ def rank_upgrades(
             "price them with get_prices."
         ),
     }
+
+
+def optimize_jewel(
+    engine: PobEngine,
+    metric: str = "TotalDPS",
+    base: str = "Emerald",
+    goals: dict[str, float] | None = None,
+    rolls: str = "realistic",
+) -> dict[str, Any]:
+    """Craft the best-in-slot rare JEWEL for the active build (marginal-ranked).
+
+    A jewel's explicit mods apply globally, so each candidate mod is measured as a custom modifier
+    on the REAL build (merged with existing custom mods) and ranked by marginal gain — jewel mods are
+    largely independent, so the top picks ≈ the best jewel, far cheaper than a full re-search. Pick a
+    `base` matching the socket's attribute (Emerald=dex, Ruby=str, Sapphire=int, Diamond=all).
+    Returns a jewel to socket with equip_jewel into an ALLOCATED socket. Radius/Time-Lost jewels
+    aren't modelled this way (their effect is positional).
+    """
+    bi = db.get_item(base)
+    if not bi or "jewel" not in (bi.get("tags") or []):
+        return {
+            "ok": False,
+            "error": f"'{base}' is not a jewel base — use Emerald/Ruby/Sapphire/Diamond.",
+        }
+    pool = db.affix_pool(base)
+    pre, suf = pool["prefixes"], pool["suffixes"]
+    if not pre and not suf:
+        return {"ok": False, "error": f"No craftable jewel affixes for base '{base}'."}
+
+    weights: dict[str, float] = {}
+    if goals:
+        weights = {str(k): float(v) for k, v in goals.items() if _num(v) and float(v) > 0}
+        if not weights:
+            return {"ok": False, "error": "goals must map stat names to positive weights."}
+    keys = list(weights) if weights else [metric]
+
+    existing = (engine.get_build().get("customMods") or "").strip()
+    snapshot = engine.get_xml()
+    try:
+
+        def measure(extra: list[str]) -> dict[str, Any]:
+            mods = (existing + "\n" + "\n".join(extra)).strip() if extra else existing
+            r = engine.set_config(custom_mods=mods)
+            st = r.get("stats") if isinstance(r, dict) else None
+            return st if isinstance(st, dict) else {}
+
+        base_stats = measure([])
+        denom = {k: max(abs(base_stats.get(k) or 0.0), 1.0) for k in keys}
+
+        def score(st: dict[str, Any]) -> float:
+            if weights:
+                return sum(
+                    w * ((st.get(k) or 0.0) - (base_stats.get(k) or 0.0)) / denom[k]
+                    for k, w in weights.items()
+                )
+            v = st.get(metric)
+            return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0.0
+
+        base_score = score(base_stats)
+
+        def ranked_side(side: list[dict[str, Any]]) -> list[tuple[float, str, dict[str, Any]]]:
+            scored = []
+            for m in side:
+                line = _roll(m["text"], rolls)
+                gain = score(measure([line])) - base_score
+                if gain > 1e-9:
+                    scored.append((gain, line, m))
+            scored.sort(key=lambda x: -x[0])
+            return scored
+
+        chosen: list[dict[str, Any]] = []
+        used: set[str] = set()
+        for side, cap in ((ranked_side(pre), 3), (ranked_side(suf), 3)):
+            n = 0
+            for _gain, line, m in side:
+                if n >= cap:
+                    break
+                if m["group"] in used:
+                    continue
+                chosen.append(
+                    {
+                        "line": line,
+                        "group": m["group"],
+                        "type": m["type"],
+                        "tiers": m.get("tiers", 1),
+                        "ilvl": m.get("required_level", 0),
+                    }
+                )
+                used.add(m["group"])
+                n += 1
+        final_lines = [c["line"] for c in chosen]
+        final_stats = measure(final_lines)
+    finally:
+        engine.load_build_xml(snapshot)
+
+    out: dict[str, Any] = {
+        "ok": True,
+        "base": base,
+        "item": f"Rarity: Rare\nOptimized Jewel\n{base}\n--------\n" + "\n".join(final_lines),
+        "affixes": final_lines,
+        "attainability": [
+            {"affix": c["line"], "ilvl": c["ilvl"], "tiers": c["tiers"]} for c in chosen
+        ],
+        "craft": _craft_summary(chosen, len(pre), len(suf)),
+        "note": (
+            "Best jewel by marginal gain (jewel mods are ~independent). Socket it with equip_jewel "
+            "into an ALLOCATED tree socket (list_jewel_sockets). Verify your jewel base's affix limit "
+            "— some hold fewer than 3 prefix / 3 suffix. Radius/Time-Lost jewels aren't modelled here."
+        ),
+    }
+    if weights:
+        out["goals"] = weights
+        out["metricsBefore"] = {k: _round2(base_stats.get(k)) for k in keys}
+        out["metricsAfter"] = {k: _round2(final_stats.get(k)) for k in keys}
+    else:
+        out["metric"] = metric
+        out["metricBefore"] = _round2(base_stats.get(metric))
+        out["metricAfter"] = _round2(final_stats.get(metric))
+    return out

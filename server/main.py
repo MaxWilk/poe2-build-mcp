@@ -21,6 +21,7 @@ from . import scaffold
 from .compute.engine import PobEngine
 from .compute import itemopt
 from .compute import solver
+from .compute import supportopt
 from .compute.pob_code import PobCodeError, decode_code, encode_code, is_link, to_xml
 from .knowledge import advice
 from .knowledge import db as corpus
@@ -735,6 +736,46 @@ def rank_upgrades(
     return itemopt.rank_upgrades(
         get_engine(), metric=metric, goals=goals, slots=slots, rolls=rolls, top=top
     )
+
+
+@mcp.tool()
+def optimize_supports(
+    metric: str = "TotalDPS",
+    goals: dict[str, float] | None = None,
+    max_supports: int = 5,
+    candidates: int = 24,
+) -> dict[str, Any]:
+    """Choose the best support-gem set for the active main skill (engine-measured).
+
+    Supports are usually a build's biggest "more" multiplier, but the corpus stores no support
+    MAGNITUDES — so this values them empirically: it greedily adds the support that most raises the
+    goal on the REAL build, round by round, until the skill's sockets are full or nothing helps.
+    Pass `goals` (weighted, e.g. {"TotalDPS":0.7,"TotalEHP":0.3}) to blend objectives; omit for a
+    single `metric`. Read-only (the build is restored); raise `candidates` for a wider search.
+    Apply the result with set_skill. Greedy, not a global optimum.
+    """
+    return supportopt.optimize_supports(
+        get_engine(), metric=metric, goals=goals, max_supports=max_supports, candidates=candidates
+    )
+
+
+@mcp.tool()
+def optimize_jewel(
+    metric: str = "TotalDPS",
+    base: str = "Emerald",
+    goals: dict[str, float] | None = None,
+    rolls: str = "realistic",
+) -> dict[str, Any]:
+    """Craft the best-in-slot rare JEWEL for the active build (one metric or a weighted goals blend).
+
+    A jewel's explicit mods apply globally, so each candidate is measured as a real modifier on the
+    build and ranked by marginal gain (jewel mods are ~independent, so the top picks ≈ the best
+    jewel). Pick a `base` matching the socket's attribute — Emerald=dex, Ruby=str, Sapphire=int,
+    Diamond=all. Returns a jewel to socket with equip_jewel into an ALLOCATED tree socket
+    (list_jewel_sockets); verify the base's affix limit. Radius/Time-Lost jewels aren't modelled
+    here (their effect is positional). Read-only: the build is restored.
+    """
+    return itemopt.optimize_jewel(get_engine(), metric=metric, base=base, goals=goals, rolls=rolls)
 
 
 def _server_version() -> str:

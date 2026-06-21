@@ -249,14 +249,18 @@ def build() -> dict[str, int]:
 
     n_mods = 0
     for mid, m in mods_data.items():
-        if m.get("domain") not in MOD_DOMAINS:
-            continue
         text = clean_text(m.get("text") or "")
         if not text:
             continue
         tags = sorted(
             {w["tag"] for w in (m.get("spawn_weights") or []) if w.get("weight") and w.get("tag")}
         )
+        # Build-relevant: item/flask mods, plus craftable JEWEL mods — which live in the 'misc'
+        # domain (not 'item'), so the gear optimizer can craft jewels too. (Desecrated/strongbox
+        # jewel mods are corrupted/special, not normal craftable rolls — excluded.)
+        is_craftable_jewel = m.get("domain") == "misc" and any("jewel" in t for t in tags)
+        if m.get("domain") not in MOD_DOMAINS and not is_craftable_jewel:
+            continue
         stats = m.get("stats") or []
         stat_ids = [s.get("id") for s in stats if s.get("id")]
         ranges = [

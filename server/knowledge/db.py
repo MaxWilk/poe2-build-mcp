@@ -172,6 +172,9 @@ def find_supports_for(skill: str, limit: int = 25) -> dict:
         shared = skill_tags & (set(json.loads(r["tags"])) - generic)
         if shared:
             compatible.append({"name": r["name"], "matches": sorted(shared)})
+    # Most tag-relevant first (more shared tags = more likely to matter), so a capped list keeps the
+    # supports worth trying — the support optimizer searches this pool.
+    compatible.sort(key=lambda c: (-len(c["matches"]), c["name"]))
     return {
         "skill": gem["name"],
         "tags": sorted(skill_tags),
@@ -381,9 +384,11 @@ def affix_pool(base_name: str, ilvl: int = 82) -> dict[str, list[dict[str, Any]]
     if not base_tags:
         return {"prefixes": [], "suffixes": []}
     con = _conn()
+    # 'item' = normal gear mods; 'misc' = craftable jewel mods (the only misc mods ingested). Tag
+    # matching below keeps jewel mods off gear and gear mods off jewels.
     rows = con.execute(
         "SELECT text, type, groups, ranges, tags, required_level FROM mods "
-        "WHERE domain = 'item' AND type IN ('prefix','suffix') "
+        "WHERE domain IN ('item', 'misc') AND type IN ('prefix','suffix') "
         "AND (required_level IS NULL OR required_level <= ?)",
         (ilvl,),
     ).fetchall()

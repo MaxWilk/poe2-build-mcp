@@ -349,6 +349,48 @@ def test_rank_upgrades_orders_slots_by_gain(engine):
     assert g["ok"] and all("score" in e and "deltas" in e for e in g["ranked"])
 
 
+def test_optimize_supports_picks_improving_set(engine):
+    # Engine-measured greedy support selection (no magnitude data needed); read-only.
+    from server.compute import supportopt
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nX\nGrand Spear\n--------\nAdds 200 to 400 Lightning Damage\n"
+        "100% increased Elemental Damage with Attacks",
+        slot="Weapon 1",
+    )
+    r = supportopt.optimize_supports(engine, metric="TotalDPS", max_supports=5, candidates=16)
+    assert r["ok"] and r["supports"]
+    assert r["finalValue"] > r["baseValue"]  # the chosen set raises DPS
+    dps = [p["TotalDPS"] for p in r["progression"]]
+    assert dps == sorted(dps)  # greedy only adds improving supports -> monotonic
+    assert engine.get_build()["mainSkill"] == "Lightning Spear"  # read-only: build restored
+
+
+def test_optimize_jewel_crafts_damage_jewel(engine):
+    # Jewel crafter: marginal-ranks jewel mods (measured as real modifiers); non-jewel base rejected.
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nX\nGrand Spear\n--------\nAdds 200 to 400 Lightning Damage\n"
+        "100% increased Elemental Damage with Attacks",
+        slot="Weapon 1",
+    )
+    r = itemopt.optimize_jewel(engine, metric="TotalDPS", base="Emerald")
+    assert r["ok"] and r["affixes"]
+    assert r["metricAfter"] > r["metricBefore"]  # the jewel raises DPS
+    assert r["item"].startswith("Rarity: Rare") and "Emerald" in r["item"]
+    assert itemopt.optimize_jewel(engine, base="Grand Spear")["ok"] is False  # not a jewel base
+    assert engine.get_build()["mainSkill"] == "Lightning Spear"  # read-only
+
+
 def test_new_build_resets(engine):
     # new_build clears gear/skills so a from-scratch build doesn't inherit a prior one's state.
     engine.new_build()
