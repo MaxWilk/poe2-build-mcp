@@ -367,7 +367,12 @@ def affix_pool(base_name: str, ilvl: int = 82) -> dict[str, list[dict[str, Any]]
 
     Used by the gear optimizer. A mod is included when its spawn tags intersect the base's
     (non-generic) tags. Each entry has the mod group (for exclusivity), type, the range text
-    (e.g. "+(80-90) to maximum Life"), and required_level. Returns only real corpus mods.
+    (e.g. "+(80-90) to maximum Life"), required_level, and `tiers` (how many ilvl tiers of that
+    exact mod can roll here — the returned one is the top/best, so it's "tier 1 of `tiers`", a
+    rough rarity/attainability signal). Returns only real corpus mods.
+
+    NOTE: the data source has no usable spawn-weights (all normalized to 1), so attainability is
+    inferred from tier depth + required level, not roll probability.
     """
     base = get_item(base_name)
     if not base:
@@ -383,6 +388,7 @@ def affix_pool(base_name: str, ilvl: int = 82) -> dict[str, list[dict[str, Any]]
         (ilvl,),
     ).fetchall()
     best: dict[tuple[str, str, str], dict[str, Any]] = {}
+    tier_count: dict[tuple[str, str, str], int] = {}
     for r in rows:
         mtags = set(json.loads(r["tags"] or "[]"))
         if not (mtags & base_tags):
@@ -398,10 +404,13 @@ def affix_pool(base_name: str, ilvl: int = 82) -> dict[str, list[dict[str, Any]]
         # the optimizer can pick the variant matching the build. Group exclusivity still applies.
         norm = re.sub(r"\d+", "#", r["text"] or "")
         key = (r["type"], group, norm)
+        tier_count[key] = tier_count.get(key, 0) + 1  # how many ilvl tiers can roll here
         rl = r["required_level"] or 0
         cur = best.get(key)
         if cur is None or rl > cur["required_level"]:
             best[key] = {"group": group, "type": r["type"], "text": r["text"], "required_level": rl}
+    for key, m in best.items():
+        m["tiers"] = tier_count.get(key, 1)
     pre = sorted((m for m in best.values() if m["type"] == "prefix"), key=lambda m: m["group"])
     suf = sorted((m for m in best.values() if m["type"] == "suffix"), key=lambda m: m["group"])
     return {"prefixes": pre, "suffixes": suf}

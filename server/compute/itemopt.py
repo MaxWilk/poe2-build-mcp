@@ -49,6 +49,45 @@ def _item_text(base: str, lines: list[str], slot: str) -> str:
     return f"Rarity: Rare\nOptimized {slot}\n{base}\n--------\n{body}"
 
 
+def _craft_summary(
+    chosen: list[dict[str, Any]], prefix_pool: int, suffix_pool: int
+) -> dict[str, Any]:
+    """A coarse craft-effort / attainability estimate (NOT a market price).
+
+    The data has no usable spawn-weights (all 1), so 'effort' is inferred from how many specific
+    affixes the craft needs, how many are a TOP tier of several (rarer rolls), and the item level
+    required — a rough realism check, not a probability or a divine cost.
+    """
+    n = len(chosen)
+    deep = sum(1 for c in chosen if (c.get("tiers") or 1) >= 4)
+    min_ilvl = max((c.get("ilvl") or 0 for c in chosen), default=0)
+    score = n + deep
+    if n == 0:
+        effort = "trivial"
+    elif score <= 3:
+        effort = "low"
+    elif score <= 6:
+        effort = "moderate"
+    elif score <= 9:
+        effort = "high"
+    else:
+        effort = "very high"
+    return {
+        "effort": effort,
+        "minItemLevel": min_ilvl,
+        "prefixPool": prefix_pool,
+        "suffixPool": suffix_pool,
+        "topTierAffixesNeeded": deep,
+        "note": (
+            f"~{effort} craft: {n} specific affix(es)"
+            + (f" ({deep} a top tier of several)" if deep else "")
+            + f" on an ilvl {min_ilvl}+ base, competing in a pool of {prefix_pool} prefix / "
+            f"{suffix_pool} suffix mods. Rough heuristic from tier depth + pool size (no spawn-weight "
+            "data); essence/bench crafts can make specific mods deterministic and cheaper."
+        ),
+    }
+
+
 def optimize_item(
     engine: PobEngine,
     slot: str,
@@ -92,11 +131,23 @@ def optimize_item(
 
     pool = db.affix_pool(base, ilvl=ilvl)
     pre = [
-        {"group": m["group"], "line": _roll(m["text"], rolls), "type": "prefix"}
+        {
+            "group": m["group"],
+            "line": _roll(m["text"], rolls),
+            "type": "prefix",
+            "tiers": m.get("tiers", 1),
+            "ilvl": m.get("required_level", 0),
+        }
         for m in pool["prefixes"]
     ]
     suf = [
-        {"group": m["group"], "line": _roll(m["text"], rolls), "type": "suffix"}
+        {
+            "group": m["group"],
+            "line": _roll(m["text"], rolls),
+            "type": "suffix",
+            "tiers": m.get("tiers", 1),
+            "ilvl": m.get("required_level", 0),
+        }
         for m in pool["suffixes"]
     ]
     if not pre and not suf:
@@ -230,6 +281,11 @@ def optimize_item(
         "base": base,
         "item": final,
         "affixes": [x["line"] for x in chosen],
+        "attainability": [
+            {"affix": c["line"], "ilvl": c.get("ilvl", 0), "tiers": c.get("tiers", 1)}
+            for c in chosen
+        ],
+        "craft": _craft_summary(chosen, len(pre), len(suf)),
         "warnings": warnings,
         "note": (
             f"Theoretical best-in-slot for {goal_desc} ({rolls} rolls) from this base's real mod "

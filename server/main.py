@@ -697,8 +697,10 @@ def optimize_item(
     no life/resists). A blended craft returns `metricsBefore`/`metricsAfter` per goal. Either way,
     re-check `get_defenses` after equipping.
 
-    The result is a *theoretical best-in-slot target* — verify attainability and price with
-    get_prices; it can't see un-modelled mechanics. Bounded greedy search, not a global optimum.
+    Each result also reports `attainability` (per chosen affix: required ilvl + tier depth, e.g. top
+    tier of 8) and a coarse `craft` effort rating — a realism check from tier depth, NOT a market
+    price (the data has no spawn-weights). The crafted item is a *theoretical best-in-slot target*;
+    verify price with get_prices. Bounded greedy search, not a global optimum.
     """
     return itemopt.optimize_item(
         get_engine(),

@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "poe2-build-mcp",
   "display_name": "Path of Exile 2 Build Assistant",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "description": "Your AI build companion for Path of Exile 2. Import a build for real Path of Building numbers, theorycraft and optimize upgrades, search items, gems, and uniques, and check live prices — every stat computed by the engine, never guessed.",
   "icon": "assets/icon.png",
   "author": {
@@ -53,7 +53,7 @@
     { "name": "dealloc_passive", "description": "Deallocate a passive node." },
     { "name": "optimize_passives", "description": "Allocate points to maximize a stat, 'balanced', or weighted goals; can require nodes." },
     { "name": "scaffold_gear", "description": "Fill empty defensive slots with placeholder gear to close resist/pool gaps." },
-    { "name": "optimize_item", "description": "Craft the best-in-slot rare for a slot — one metric, or a weighted goals blend (e.g. DPS+EHP) for realistic gear." },
+    { "name": "optimize_item", "description": "Craft the best-in-slot rare for a slot — one metric, or a weighted goals blend (e.g. DPS+EHP); reports per-affix attainability (ilvl/tier) + a craft-effort estimate." },
     { "name": "rank_upgrades", "description": "Rank gear slots by how much recrafting each would gain — what to upgrade next." },
     { "name": "search_items", "description": "Search item bases." },
     { "name": "find_skills", "description": "Find skill/support gems." },

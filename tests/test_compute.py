@@ -305,6 +305,27 @@ def test_optimize_item_blended_goals_balances_offense_and_defense(engine):
     assert bad["ok"] is False
 
 
+def test_optimize_item_reports_attainability_and_craft(engine):
+    # Attainability: each chosen affix carries its required ilvl + tier depth (top tier of N); craft:
+    # a coarse effort rating. Tier-depth derived (the data has no usable spawn-weights).
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nX\nGrand Spear\n--------\nAdds 40 to 80 Lightning Damage", slot="Weapon 1"
+    )
+    r = itemopt.optimize_item(engine, "Weapon 1", metric="TotalDPS")
+    assert r["ok"] and r["attainability"]
+    for a in r["attainability"]:
+        assert a["affix"] and a["ilvl"] >= 0 and a["tiers"] >= 1
+    craft = r["craft"]
+    assert craft["effort"] in {"trivial", "low", "moderate", "high", "very high"}
+    assert craft["minItemLevel"] >= 1 and craft["prefixPool"] >= 1
+
+
 def test_rank_upgrades_orders_slots_by_gain(engine):
     # The "what to upgrade next" tool: recrafts each slot and ranks by gain, high -> low, read-only.
     from server import scaffold
