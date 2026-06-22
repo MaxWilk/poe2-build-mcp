@@ -509,6 +509,26 @@ def optimize_jewel(
 _OFFENSE_SLOTS = ("Weapon 1", "Amulet", "Gloves", "Ring 1")
 _DEFENSE_SLOTS = ("Body Armour", "Helmet", "Boots", "Belt", "Ring 2", "Weapon 2")
 
+# Armour/jewellery slots plan_gear can AUTO-BASE for a from-scratch set -> the corpus item_class to
+# pull a base from. Weapons (and the off-hand) are archetype-defining, so they're left to the caller.
+_AUTO_BASE_CLASS = {
+    "Helmet": "Helmet",
+    "Body Armour": "Body Armour",
+    "Gloves": "Gloves",
+    "Boots": "Boots",
+    "Belt": "Belt",
+    "Amulet": "Amulet",
+    "Ring 1": "Ring",
+    "Ring 2": "Ring",
+}
+
+
+def _attr_bias(engine: PobEngine) -> str:
+    """The build's dominant attribute ('str'/'dex'/'int') — picks wearable, layer-appropriate bases."""
+    st = engine.get_stats(["Str", "Dex", "Int"]).get("stats") or {}
+    by = {"str": st.get("Str") or 0, "dex": st.get("Dex") or 0, "int": st.get("Int") or 0}
+    return max(by, key=lambda k: by[k])
+
 
 def _marginal_craft(
     engine: PobEngine, slot: str, base: str, weights: dict[str, float], rolls: str
@@ -558,6 +578,8 @@ def plan_gear(
     dps_weight: float = 0.7,
     rolls: str = "realistic",
     slots: list[str] | None = None,
+    auto_base: bool = True,
+    min_ehp: float | None = None,
 ) -> dict[str, Any]:
     """Plan a whole gear set that maximizes damage while capping resists (budget-allocation heuristic).
 
@@ -565,8 +587,13 @@ def plan_gear(
     they cost the least damage. This crafts OFFENSE slots damage-leaning and DEFENSE slots EHP-leaning
     (which naturally pulls the missing resists onto the defensive pieces), building each slot on top
     of the previous so the plan is coherent — not the order-independent, per-slot view of
-    rank_upgrades. Read-only: returns the per-slot plan + the projected whole-build DPS/EHP/resists;
-    equip the items yourself. Greedy heuristic, not a global optimum.
+    rank_upgrades.
+
+    `auto_base` (default on) equips a sensible, attribute-appropriate base into EMPTY armour/jewellery
+    slots so a from-scratch build gets a WHOLE set (weapons stay caller-supplied — they're archetype-
+    defining). `min_ehp` adds a floor: after the damage/resist plan, defensive slots are re-crafted
+    toward pure EHP (the cheapest DPS to give up) until TotalEHP reaches it. Read-only: returns the
+    per-slot plan + projected whole-build DPS/EHP/resists; equip the items yourself. Greedy heuristic.
     """
     dps_weight = min(max(float(dps_weight), 0.0), 1.0)
     off_goal = (
@@ -581,13 +608,31 @@ def plan_gear(
     snapshot = engine.get_xml()
     plan: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
+    slot_base: dict[str, str] = {}
     try:
+        attr = _attr_bias(engine) if auto_base else "int"
         for slot in order:
             cur = gear.get(slot)
-            if not (isinstance(cur, dict) and cur.get("base")):
-                skipped.append({"slot": slot, "reason": "empty (no base) — equip a base first"})
+            if isinstance(cur, dict) and cur.get("base"):
+                base: str | None = cur["base"]
+            elif auto_base and slot in _AUTO_BASE_CLASS:
+                # AUTO-BASE an empty armour/jewellery slot so a from-scratch build gets a whole set.
+                base = db.pick_base(_AUTO_BASE_CLASS[slot], attr)
+                if base:
+                    engine.add_item(
+                        _item_text(base, [], slot), slot=slot
+                    )  # bare base; crafted below
+            else:
+                base = None
+            if not base:
+                reason = (
+                    "empty weapon slot — equip a base first (archetype-defining)"
+                    if slot in ("Weapon 1", "Weapon 2")
+                    else "empty (no base) — equip a base first"
+                )
+                skipped.append({"slot": slot, "reason": reason})
                 continue
-            base = cur["base"]
+            slot_base[slot] = base
             goal = off_goal if slot in _OFFENSE_SLOTS else def_goal
             item = _marginal_craft(engine, slot, base, goal, rolls)
             if not item:
@@ -596,6 +641,21 @@ def plan_gear(
             engine.add_item(item, slot=slot)  # persist so the next slot is crafted coherently
             affixes = [ln for ln in item.split("--------\n")[-1].split("\n") if ln.strip()]
             plan.append({"slot": slot, "item": item, "affixes": affixes})
+        # EHP-floor recovery: if short of `min_ehp`, re-craft DEFENSE slots toward pure EHP (which
+        # PoB's effective-HP also credits resists for) — the cheapest DPS to give up — until met.
+        ehp_floor_met: bool | None = None
+        if min_ehp:
+            for slot in [s for s in order if s in _DEFENSE_SLOTS and s in slot_base]:
+                if (engine.get_defenses().get("totalEHP") or 0) >= min_ehp:
+                    break
+                item = _marginal_craft(engine, slot, slot_base[slot], {"TotalEHP": 1.0}, rolls)
+                if not item:
+                    continue
+                engine.add_item(item, slot=slot)
+                affixes = [ln for ln in item.split("--------\n")[-1].split("\n") if ln.strip()]
+                plan[:] = [p for p in plan if p["slot"] != slot]
+                plan.append({"slot": slot, "item": item, "affixes": affixes})
+            ehp_floor_met = (engine.get_defenses().get("totalEHP") or 0) >= min_ehp
         stats = engine.get_stats(["TotalDPS", "FullDPS"])["stats"]
         d = engine.get_defenses()
     finally:
@@ -605,18 +665,23 @@ def plan_gear(
     missing = d.get("resistMissing") or {}
     res_capped = all((missing.get(e) or 0) <= 0 for e in _RES_KEYS)
     chaos_capped = (res.get("chaos") or 0) >= 75
+    projected: dict[str, Any] = {
+        "TotalDPS": _round2(stats.get("TotalDPS")),
+        "FullDPS": _round2(stats.get("FullDPS")),
+        "TotalEHP": _round2(d.get("totalEHP")),
+        "resistances": res,
+        "resistsCapped": res_capped,
+        "chaosCapped": chaos_capped,
+    }
+    if min_ehp:
+        projected["minEHP"] = min_ehp
+        projected["ehpFloorMet"] = ehp_floor_met
     return {
         "ok": True,
         "plan": plan,
         "skipped": skipped,
-        "projected": {
-            "TotalDPS": _round2(stats.get("TotalDPS")),
-            "FullDPS": _round2(stats.get("FullDPS")),
-            "TotalEHP": _round2(d.get("totalEHP")),
-            "resistances": res,
-            "resistsCapped": res_capped,
-            "chaosCapped": chaos_capped,
-        },
+        "autoBased": [s for s in slot_base if not (gear.get(s) or {}).get("base")],
+        "projected": projected,
         "note": (
             "Budget-allocation heuristic: offense slots crafted damage-leaning, defense slots EHP-"
             "leaning (which pulls missing resists onto the cheapest-DPS pieces), built slot-by-slot so "

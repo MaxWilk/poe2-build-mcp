@@ -46,9 +46,14 @@ then read back computed DPS, EHP, resistances, life/ES, and more.
 
 **Create, craft & max** builds from scratch: set class/ascendancy, level, skills, gear, config, and
 the passive tree, validating every change on the engine. Optimizers craft blended best-in-slot gear
-and jewels, pick the strongest support set (engine-measured), plan a whole gear set that caps
-resists while maxing damage, and rank what to upgrade next — plus a greedy passive optimizer and an
-A/B `compare_to`.
+and jewels, auto-base and plan a whole gear set that caps resists (with an EHP floor), pick the
+strongest support set (engine-measured), surface build-defining uniques, and rank what to upgrade
+next — plus a greedy passive optimizer and an A/B `compare_to`.
+
+> From-scratch construction yields a *complete, resist-capped, engine-verified* build that clears
+> most endgame. The absolute 600k–1M-DPS meta ceiling comes from expert archetype synthesis, perfect
+> gear/uniques, and a few mechanics PoB doesn't yet model (e.g. energy-meta triggers) — for that,
+> `import_build` an established build and **verify + improve** it with the same tools.
 
 **Look things up** offline: items, skill/support gems, affixes, uniques, passives, ascendancies
 — a bundled SQLite/FTS corpus, no network needed.
@@ -60,7 +65,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (61 MCP tools)
+### The toolset (62 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -99,6 +104,7 @@ engine confirms the effect.
 - `relevant_mechanics()` — mechanics worth reading for the *active* build + the engine damage diagnostic
 - `search_mods(query, item_tag?, mod_type?)` / `reverse_lookup(stat)`
 - `search_uniques(query, item_type?)` / `get_unique(name)`
+- `relevant_uniques()` — unique items + unique jewels that synergize with the *active* build (build-defining gear a rare-only build misses; corpus suggestions, verify on the engine)
 - `parse_item(text)` — parse an item's text → affix tiers (T1=best) + open prefix/suffix slots
 - `list_ascendancies(character?)` / `corpus_info()`
 

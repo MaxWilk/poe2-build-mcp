@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -114,6 +115,27 @@ def get_item(name_or_id: str) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+# Body/helmet/gloves/boots gate on an attribute and supply a matching defence layer; belt/amulet/ring
+# are attribute-agnostic. So when auto-basing a from-scratch set we match the build's main attribute
+# (int→ES, dex→evasion, str→armour) for the gated pieces, and just take the best base otherwise.
+_ATTR_GATED_CLASSES = {"Body Armour", "Helmet", "Gloves", "Boots"}
+
+
+def pick_base(item_class: str, attr: str | None = None) -> str | None:
+    """Pick a sensible endgame base for an item_class — the highest-ilvl one, preferring the build's
+    attribute (`attr` in {"str","dex","int"}) for attribute-gated armour so it's wearable and gives
+    the matching defence layer. Returns the base name, or None if the class has no bases."""
+    rows = search_items(item_class=item_class, limit=25)  # highest drop_level first
+    if not rows:
+        return None
+    if attr and item_class in _ATTR_GATED_CLASSES:
+        tag = f"{attr}_armour"
+        for r in rows:
+            if tag in (r.get("tags") or []):
+                return str(r["name"])
+    return str(rows[0]["name"])
+
+
 def find_skills(
     query: str = "",
     gem_type: str | None = None,
@@ -159,6 +181,13 @@ def find_skills(
     ]
 
 
+# Damage-type/element tags. A support that shares one of these with the skill (lightning ↔ lightning)
+# is far more likely to be a real DPS lever — penetration, added/increased element damage, exposure —
+# than one sharing only a delivery tag (projectile/area). find_supports_for ranks these matches
+# highest so they survive the cap; the support optimizer's candidate pool depends on it.
+_DAMAGE_TYPE_TAGS = {"fire", "cold", "lightning", "chaos", "physical", "elemental"}
+
+
 def find_supports_for(skill: str, limit: int = 25) -> dict:
     """Find support gems for a skill: its curated recommendations plus tag-compatible supports."""
     gem = get_gem(skill)
@@ -171,10 +200,23 @@ def find_supports_for(skill: str, limit: int = 25) -> dict:
     for r in con.execute("SELECT name, tags FROM gems WHERE gem_type = 'support' ORDER BY name"):
         shared = skill_tags & (set(json.loads(r["tags"])) - generic)
         if shared:
-            compatible.append({"name": r["name"], "matches": sorted(shared)})
-    # Most tag-relevant first (more shared tags = more likely to matter), so a capped list keeps the
-    # supports worth trying — the support optimizer searches this pool.
-    compatible.sort(key=lambda c: (-len(c["matches"]), c["name"]))
+            compatible.append(
+                {
+                    "name": r["name"],
+                    "matches": sorted(shared),
+                    "on_element": any(m in _DAMAGE_TYPE_TAGS for m in shared),
+                }
+            )
+
+    # Most relevant first so a capped list keeps the supports worth trying (the support optimizer
+    # searches this pool). A shared *damage-type* tag signals far more value than a delivery tag —
+    # penetration/added-damage supports often share only the element, so rank element matches above
+    # raw match count or they get truncated away (e.g. Lightning Penetration on a lightning skill).
+    def _relevance(c: dict) -> tuple[int, int, str]:
+        type_hits = sum(1 for m in c["matches"] if m in _DAMAGE_TYPE_TAGS)
+        return (-type_hits, -len(c["matches"]), c["name"])
+
+    compatible.sort(key=_relevance)
     return {
         "skill": gem["name"],
         "tags": sorted(skill_tags),
@@ -203,6 +245,27 @@ def get_gem(name_or_id: str) -> dict | None:
         "description": row["description"],
         "types": json.loads(row["types"]),
     }
+
+
+# Energy-based META-TRIGGER gems (Cast on Critical, the Invocations, Spell-on-Hit, etc.): they
+# reserve spirit and fire SOCKETED spells via an energy/condition mechanic. The pinned PoB-PoE2
+# calc has the gem DATA but NOT a handler that turns "energy generated on crit/hit" into a trigger
+# rate — so a socketed spell is computed as a weak SELF-CAST, never as the triggered nuke it is in
+# game. We can't fake the number (engine = source of truth), so tools must SURFACE this limitation.
+_META_TRIGGER_TAGS = {"meta", "trigger"}
+
+
+def meta_trigger_gems(names: Iterable[str]) -> list[str]:
+    """Of `names`, the ones that are energy-based meta-trigger gems whose triggered-spell DPS the
+    engine does not model (see `_META_TRIGGER_TAGS`). Returns canonical gem names (deduped)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for n in names:
+        gem = get_gem(n) if n else None
+        if gem and _META_TRIGGER_TAGS <= set(gem.get("tags") or []) and gem["name"] not in seen:
+            seen.add(gem["name"])
+            out.append(gem["name"])
+    return out
 
 
 def list_ascendancies(character: str | None = None) -> list[dict]:
@@ -341,6 +404,32 @@ def search_uniques(query: str = "", item_type: str | None = None, limit: int = 2
     return [
         {"name": r["name"], "base": r["base"], "item_type": r["item_type"]}
         for r in con.execute(sql, params)
+    ]
+
+
+def relevant_uniques(keywords: list[str], limit: int = 15) -> list[dict]:
+    """Uniques whose name/base/mod text matches the MOST of a build's scaling `keywords` (e.g. its
+    damage type + skill type + skill name), ranked by how many match. Corpus relevance only — these
+    are CANDIDATES (a unique often ENABLES a mechanic, not just adds a stat); the caller must read the
+    text and equip + measure on the engine to value them."""
+    scored: dict[str, dict[str, Any]] = {}
+    for kw in keywords:
+        if not kw:
+            continue
+        for u in search_uniques(query=kw, limit=40):
+            e = scored.setdefault(u["name"], {**u, "matched": set()})
+            matched = e["matched"]
+            if isinstance(matched, set):
+                matched.add(kw)
+    ranked = sorted(scored.values(), key=lambda e: (-len(e["matched"]), str(e["name"])))
+    return [
+        {
+            "name": e["name"],
+            "base": e["base"],
+            "item_type": e["item_type"],
+            "matched": sorted(e["matched"]),
+        }
+        for e in ranked[:limit]
     ]
 
 

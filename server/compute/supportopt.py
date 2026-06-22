@@ -22,19 +22,44 @@ def _r2(x: Any) -> Any:
     return round(x, 2) if _num(x) else x
 
 
+def _screen_set(skill: str, screen: int) -> list[str]:
+    """Tag-relevant supports to solo-screen: recommended + on-element first, then delivery, deduped
+    and bounded to `screen`.
+
+    On-element supports (those sharing the skill's damage type) lead so they survive the bound — they
+    include the premier levers (penetration, added/increased element damage) that a tag-COUNT ranking
+    buries, because such a support often shares ONLY the element tag and so looks "least relevant".
+    """
+    info = db.find_supports_for(skill, limit=9999)
+    rec = info.get("recommended") or []
+    comp = info.get("compatible") or []
+    on_elem = [c["name"] for c in comp if c.get("on_element")]
+    delivery = [c["name"] for c in comp if not c.get("on_element")]
+    out: list[str] = []
+    seen: set[str] = set()
+    for nm in (*rec, *on_elem, *delivery):
+        if nm and nm not in seen:
+            seen.add(nm)
+            out.append(nm)
+    return out[: max(screen, 1)]
+
+
 def optimize_supports(
     engine: PobEngine,
     metric: str = "TotalDPS",
     goals: dict[str, float] | None = None,
     max_supports: int = 5,
-    candidates: int = 24,
+    candidates: int = 16,
+    screen: int = 48,
 ) -> dict[str, Any]:
     """Greedily choose the best support-gem set for the active main skill (engine-measured).
 
     `goals` (weighted, e.g. {"TotalDPS":.7,"TotalEHP":.3}) blends objectives; omit for single
-    `metric`. Tries the skill's recommended + tag-compatible supports, adding the one that most
-    improves the goal each round until full or nothing helps (the skill's socket cap is found
-    naturally — over-cap gems are ignored, so they show no gain). Read-only: the build is restored.
+    `metric`. Builds the candidate pool by MEASUREMENT, not tags: it solo-measures the skill's
+    tag-relevant supports (`screen` of them; on-element supports — those sharing the skill's damage
+    type, like penetration — are always included), keeps the strongest `candidates`, then greedily
+    adds the support that most improves the goal each round until the sockets are full or nothing
+    helps (over-cap gems are ignored, so they show no gain). Read-only: the build is restored.
     """
     grp = engine.get_build().get("mainSkillGroup") or []
     if not grp:
@@ -50,16 +75,8 @@ def optimize_supports(
             return {"ok": False, "error": "goals must map stat names to positive weights."}
     keys = list(weights) if weights else [metric]
 
-    info = db.find_supports_for(skill, limit=candidates)
-    names = (info.get("recommended") or []) + [c["name"] for c in (info.get("compatible") or [])]
-    pool: list[str] = []
-    seen: set[str] = set()
-    for nm in names:
-        if nm and nm not in seen:
-            seen.add(nm)
-            pool.append(nm)
-    pool = pool[:candidates]
-    if not pool:
+    screen_names = _screen_set(skill, screen)
+    if not screen_names:
         return {"ok": False, "error": f"No supports found for '{skill}'."}
 
     snapshot = engine.get_xml()
@@ -87,8 +104,21 @@ def optimize_supports(
                 return float(v)
             return float("-inf")
 
+        # Candidate pool by MEASUREMENT, not tag count. A support's shared-tag count is a poor proxy
+        # for value — top DPS levers like penetration or added-damage often share only the element
+        # tag and would be truncated out of a tag-ranked list. So solo-measure each tag-relevant
+        # support and keep the strongest `candidates` for the combo-aware greedy below. This is what
+        # lets the search find e.g. Lightning Penetration on a lightning skill.
+        base_sc = score(base_stats)
+        screened = sorted(
+            ((score(measure([nm])), nm) for nm in screen_names),
+            key=lambda t: t[0],
+            reverse=True,
+        )
+        pool = [nm for sc, nm in screened if sc > base_sc + 1e-9][:candidates]
+
         chosen: list[str] = []
-        cur = score(base_stats)
+        cur = base_sc
         progression: list[dict[str, Any]] = []
         while len(chosen) < max_supports:
             best_nm, best_sc, best_st = None, cur, None
@@ -112,12 +142,14 @@ def optimize_supports(
         "ok": True,
         "skill": skill,
         "supports": chosen,
+        "screened": len(screen_names),
         "candidatesTried": len(pool),
         "progression": progression,
         "note": (
-            "Greedy engine search — each support is the one that most raised the goal on the REAL "
-            "build (the corpus has no support magnitudes, so they're valued empirically). Stops when "
-            "nothing helps or the skill's sockets are full (over-cap gems are ignored). Apply with "
+            "Engine search — each support is valued empirically (the corpus has no support "
+            "magnitudes). The pool is chosen by MEASUREMENT not tags: every tag-relevant support is "
+            "solo-measured and the strongest kept, then combined greedily. Stops when nothing helps "
+            "or the skill's sockets are full (over-cap gems are ignored). Apply with "
             "set_skill('<skill> <lvl>/<q> 1 / " + " / ".join(chosen or ["<support>"]) + "'). "
             "Greedy, not a global optimum."
         ),

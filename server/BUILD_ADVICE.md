@@ -76,16 +76,42 @@ core multiplier**, not more small increases. Work in this order:
    cast rate; for a mana-stacker it's ES/mana via **Eldritch Battery + Mind over Matter** (one stat
    becomes both damage *and* EHP). Mana-stacking is ONE layer, **not automatically the master
    lever** — `rank_levers` tells you which actually moves *this* build.
-5. **Don't skip jewels.** Real endgame builds run **8–10 jewels**, including unique/timeless ones
-   (Voices, Megalomaniac, From Nothing, Time-Lost) that supply huge passive/notable density — that's
-   often why a meta tree reads "over budget". Craft rare jewels with `optimize_jewel` and socket them
-   via `equip_jewel` (`list_jewel_sockets`).
+5. **Don't skip jewels — or build-defining UNIQUES.** Real endgame builds run **8–10 jewels**,
+   including unique/timeless ones (Voices, Megalomaniac, From Nothing, Time-Lost) that supply huge
+   passive/notable density — that's often why a meta tree reads "over budget". Craft rare jewels with
+   `optimize_jewel`; socket via `equip_jewel` (`list_jewel_sockets`). More broadly, a pile of
+   self-crafted RARES is the **from-scratch ceiling** (~100k) — the leap to pinnacle usually comes
+   from a **build-defining unique** (extra projectiles, "+levels to skills", a converted/enabled
+   mechanic) that rares simply can't roll. Use **`relevant_uniques`** to surface the uniques + unique
+   jewels that match the active build's scaling, read the full text (`get_unique`), then `equip_item`
+   / `equip_jewel` and **measure the delta on the engine** — uniques ENABLE mechanics, so verify, and
+   never quote their power from the corpus text.
 6. **Re-verify defense after each big swing.** Resists drift and silently break caps when you
    reshuffle gear for damage — re-check `get_defenses` every time.
 
 A useful sanity check: realistic gear should reach high six figures on a strong archetype; if the
 engine shows far less, suspect either a missing core multiplier (above) or that a mechanic isn't
 being modeled — note the latter rather than trusting the low number.
+
+**Know what the engine can and can't model — and choose a modellable archetype.** The pinned PoB
+computes hits, ailments, auras, and supports faithfully, but it does **NOT** yet model **energy-based
+meta TRIGGERS** — Cast on Critical and the Invocation / Spell-on-Hit gems. A spell socketed into one
+computes as a weak **self-cast**, never the triggered nuke it is in game; the tools flag this as
+`engineLimitation` in their output. So the famous **Cast-on-Critical → Comet** pinnacle setup (and
+similar trigger-meta builds) **can't be honestly costed here yet** — never present a triggered
+skill's self-cast number as its real DPS. When the goal points at a trigger-meta archetype, say the
+engine can't model it yet and steer to one it CAN: a **directly cast/attacked** crit skill, an
+ailment/DoT, minions, or a "more"/penetration stack all compute faithfully and reach pinnacle DPS.
+
+**A multiplier reads weak until it's fully assembled.** Crit chance especially: "% increased" only
+scales a low base (~5–10%), so increased alone caps far short of the ~90%+ a nuke wants — real crit
+comes from **flat "+to Critical Hit Chance", a high-base-crit weapon/skill, or an ascendancy crit
+ENGINE** (e.g. an accuracy→crit conversion — which can have steep diminishing returns, so verify it
+on the engine, don't assume it scales linearly). Because a half-built multiplier reads weak *per
+slot*, judge crit (or any "more" lane) once it's **committed across the whole build** — tree plus
+several gear slots together — not from one slot's marginal Δ. Greedy per-slot tuning systematically
+under-rates a lane you're still assembling, which is why reaching pinnacle takes a deliberate
+archetype commitment, not slot-by-slot hill-climbing.
 
 **Measure the right number, with the fight realistic.** For multi-projectile/multi-hit skills read
 **FullDPS** (PoB's combined, all-hits-landing figure) alongside the per-hit `TotalDPS`. The true

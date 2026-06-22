@@ -367,7 +367,24 @@ def test_optimize_supports_picks_improving_set(engine):
     assert r["finalValue"] > r["baseValue"]  # the chosen set raises DPS
     dps = [p["TotalDPS"] for p in r["progression"]]
     assert dps == sorted(dps)  # greedy only adds improving supports -> monotonic
+    # Regression: Lightning Penetration shares only the element tag (1 match), so the old tag-capped
+    # pool dropped it entirely; the measurement-based pool must surface it and the greedy pick it.
+    assert "Lightning Penetration" in r["supports"]
+    assert r["screened"] >= 30  # solo-screened a broad pool, not a tiny tag-ranked slice
     assert engine.get_build()["mainSkill"] == "Lightning Spear"  # read-only: build restored
+
+
+def test_support_pool_surfaces_on_element_levers():
+    # Root-cause guard (corpus only, no engine): on-element supports like penetration must be flagged
+    # and survive into the optimizer's screening set despite sharing only the element tag.
+    from server.compute import supportopt
+    from server.knowledge import db
+
+    info = db.find_supports_for("Lightning Spear", limit=9999)
+    pen = next(c for c in info["compatible"] if c["name"] == "Lightning Penetration")
+    assert pen["on_element"] is True and pen["matches"] == ["lightning"]
+    screen = supportopt._screen_set("Lightning Spear", 48)
+    assert "Lightning Penetration" in screen and "Overcharge" in screen
 
 
 def test_optimize_jewel_crafts_damage_jewel(engine):
@@ -521,8 +538,154 @@ def test_solver_levers(engine):
     assert solver._template_for("increased projectile damage") == "{}% increased Projectile Damage"
     assert "{0}" in solver._template_for("added cold damage")
     assert "Critical Damage Bonus" in solver._template_for("critical strike multiplier")
+    # PoE2 renamed crit chance -> "Critical Hit Chance"; the engine silently ignores the PoE1
+    # "Critical Strike Chance" wording, so both the alias and the default scan must emit the PoE2
+    # stat (otherwise rank_levers/solve_for report crit chance as a dead 0-gain lever).
+    assert solver._template_for("critical strike chance") == "{}% increased Critical Hit Chance"
+    assert solver._template_for("critical hit chance") == "{}% increased Critical Hit Chance"
+    assert "{}% increased Critical Hit Chance" in solver._DEFAULT_LEVERS
+    assert "{}% increased Critical Strike Chance" not in solver._DEFAULT_LEVERS
     names = solver.list_levers()["levers"]
     assert "increased projectile damage" in names and len(names) > 20
+
+
+def test_crit_chance_lever_registers_on_engine(engine):
+    # Regression: "increased Critical Hit Chance" (PoE2) must raise crit chance; the PoE1 wording
+    # "Critical Strike Chance" is silently ignored by the engine — which had made the crit lever
+    # invisible to rank_levers/solve_for and steered builds away from the crit (pinnacle) archetype.
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nX\nGrand Spear\n--------\nAdds 200 to 400 Lightning Damage", slot="Weapon 1"
+    )
+    base = engine.get_stats(["CritChance"])["stats"]["CritChance"]
+    engine.set_config(custom_mods="100% increased Critical Hit Chance")
+    raised = engine.get_stats(["CritChance"])["stats"]["CritChance"]
+    engine.set_config(custom_mods="100% increased Critical Strike Chance")
+    ignored = engine.get_stats(["CritChance"])["stats"]["CritChance"]
+    engine.set_config(custom_mods="")
+    assert raised > base  # PoE2 wording registers
+    assert ignored == base  # PoE1 wording does nothing — documents the rename
+
+
+def test_default_damage_levers_register_on_engine(engine):
+    # Standing guard against PoE1->PoE2 terminology rot: every DAMAGE/crit lever in rank_levers'
+    # default scan must actually move the engine. A renamed/ignored stat reads a silent 0 (which is
+    # exactly how "Critical Strike Chance" hid the crit lever). Uses a crit-capable SPELL build so
+    # damage/cast-speed/crit all apply, with a boss enemy so penetration has resistance to bite.
+    from server.compute import solver
+
+    engine.new_build()
+    engine.set_class("Witch", "Infernalist")
+    engine.set_level(90)
+    engine.paste_skill("Fireball 20/20  1")
+    engine.set_config(options={"enemyIsBoss": "Boss"})
+    base = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    assert isinstance(base, (int, float)) and base > 0
+    damage_levers = [
+        t for t in solver._DEFAULT_LEVERS if "maximum Life" not in t and "Energy Shield" not in t
+    ]
+    assert (
+        "{}% increased Attack Speed" in solver._DEFAULT_LEVERS
+    )  # an attack-only lever; skip below
+    for tmpl in damage_levers:
+        if "Attack Speed" in tmpl:
+            continue  # irrelevant to a spell; covered by the attack-build crit test above
+        engine.set_config(custom_mods=tmpl.replace("{}", "200"))
+        after = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+        engine.set_config(custom_mods="")
+        assert after > base, (
+            f"default lever does not register on the engine (terminology rot?): {tmpl}"
+        )
+
+
+def test_meta_trigger_guardrail_flags_unmodellable_triggers():
+    # Gap C guardrail: the engine does NOT model energy-based meta triggers (Cast on Critical → a
+    # socketed spell computes as a weak self-cast), so the tools must surface `engineLimitation` when
+    # such a gem is present — and must NOT false-flag ordinary skills/supports.
+    from server import main
+    from server.knowledge import db
+
+    assert db.meta_trigger_gems(["Cast on Critical", "Lightning Spear", "Comet"]) == [
+        "Cast on Critical"
+    ]
+    assert db.meta_trigger_gems(["Lightning Spear", "Lightning Penetration"]) == []
+    names = main._gem_names_in("Lightning Spear 20/20 1 / Cast on Critical / Comet 20/20 1")
+    assert {"Lightning Spear", "Cast on Critical", "Comet"} <= set(names)  # level slash not split
+    flagged = main._flag_meta_trigger({"ok": True}, names)
+    assert "engineLimitation" in flagged and "Cast on Critical" in flagged["engineLimitation"]
+    assert "engineLimitation" not in main._flag_meta_trigger({"ok": True}, ["Lightning Spear"])
+
+
+def test_pick_base_prefers_attribute():
+    # Auto-base picks attribute-appropriate gear: an int vs str body must differ (wearable + the right
+    # defence layer); jewellery is attribute-agnostic but still returns a base.
+    from server.knowledge import db
+
+    int_body = db.pick_base("Body Armour", "int")
+    str_body = db.pick_base("Body Armour", "str")
+    assert int_body and str_body and int_body != str_body
+    assert db.pick_base("Ring", "int") is not None
+
+
+def test_relevant_uniques_ranks_by_keyword_match():
+    # (b) build-aware unique discovery: ranks uniques by how many of the build's scaling keywords
+    # their mods/name match (corpus relevance — the engine still verifies actual value).
+    from server.knowledge import db
+
+    rel = db.relevant_uniques(["lightning", "spell", "projectile"], limit=12)
+    assert rel  # finds candidates
+    assert all(u.get("matched") for u in rel)  # each records which keywords it matched
+    counts = [len(u["matched"]) for u in rel]
+    assert counts == sorted(counts, reverse=True)  # ranked most-relevant first
+    assert any(len(u["matched"]) >= 2 for u in rel)  # at least one multi-keyword (synergistic) hit
+
+
+def test_plan_gear_auto_bases_a_full_set_from_scratch(engine):
+    # #1: plan_gear fills EMPTY armour/jewellery slots with attribute-appropriate bases so a
+    # weapon-only from-scratch build gets a whole, resist-capped set; weapons stay caller-supplied.
+    from server.compute import itemopt
+
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(95)
+    engine.paste_skill("Spark 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nW\nDueling Wand\n+5 to Level of all Lightning Spell Skills\n"
+        "Adds 40 to 600 Lightning Damage to Spells\n117% increased Spell Damage",
+        slot="Weapon 1",
+    )
+    r = itemopt.plan_gear(engine, dps_weight=0.6, min_ehp=12000)
+    planned = {p["slot"] for p in r["plan"]}
+    for slot in ("Amulet", "Gloves", "Ring 1", "Ring 2", "Body Armour", "Helmet", "Boots", "Belt"):
+        assert slot in planned, f"auto-base missed {slot}"
+    assert r["projected"]["resistsCapped"]  # a whole auto-based set caps resists
+    assert "ehpFloorMet" in r["projected"]  # the min_ehp floor is evaluated + reported
+    assert engine.get_build()["mainSkill"] == "Spark"  # read-only: build restored
+
+
+def test_optimize_passives_respects_separate_ascendancy_budget(engine):
+    # Ascendancy is a SEPARATE 8-point pool: optimize_passives must auto-allocate ascendancy notables
+    # WITHOUT charging them to the passive budget (which had stranded passive points) and never exceed
+    # 8; get_build reports the pool so over-allocation is visible.
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(95)
+    engine.paste_skill("Spark 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nW\nDueling Wand\n+5 to Level of all Lightning Spell Skills\n"
+        "Adds 40 to 600 Lightning Damage to Spells\n117% increased Spell Damage",
+        slot="Weapon 1",
+    )
+    engine.optimize_passives(metric="TotalDPS", points=0)  # use all available passive points
+    b = engine.get_build()
+    assert b["ascendancyPointsMax"] == 8
+    assert 0 < b["ascendancyPointsUsed"] <= 8  # auto-allocated, within the separate cap
+    assert b["ascendancyNotables"]  # ascendancy notables were actually allocated
+    assert b["pointsUsed"] <= b["pointsAvailable"]  # passive count excludes ascendancy
+    assert "ascendancyNote" not in b  # not over budget -> no warning
 
 
 def test_damage_diagnostic_silent_when_computable(engine):

@@ -33,8 +33,12 @@ LEVERS: dict[str, str] = {
     "increased cast speed": "{}% increased Cast Speed",
     "attack speed": "{}% increased Attack Speed",
     "cast speed": "{}% increased Cast Speed",
-    "increased critical strike chance": "{}% increased Critical Strike Chance",
-    "critical strike chance": "{}% increased Critical Strike Chance",
+    # PoE2 renamed crit chance -> Critical HIT Chance (the engine silently ignores the PoE1
+    # "Critical Strike Chance" wording); keep the old names as aliases that emit the PoE2 stat.
+    "increased critical hit chance": "{}% increased Critical Hit Chance",
+    "critical hit chance": "{}% increased Critical Hit Chance",
+    "increased critical strike chance": "{}% increased Critical Hit Chance",
+    "critical strike chance": "{}% increased Critical Hit Chance",
     # PoE2 renamed crit multiplier -> Critical Damage Bonus; accept both names.
     "critical damage bonus": "+{}% to Critical Damage Bonus",
     "critical strike multiplier": "+{}% to Critical Damage Bonus",
@@ -50,6 +54,13 @@ LEVERS: dict[str, str] = {
     "added cold damage": "Adds {0} to {0} Cold Damage",
     "added lightning damage": "Adds {0} to {0} Lightning Damage",
     "added chaos damage": "Adds {0} to {0} Chaos Damage",
+    # "+levels to skills" is the dominant endgame lever for many builds (it multiplies a skill's base
+    # values) — available by name for solve_for / explicit rank_levers. NOTE: real magnitudes are
+    # small (a few levels), so it isn't meaningfully comparable to "% increased X" at the same scan
+    # unit; treat it as an archetype lever to check, not a marginal one.
+    "levels": "+{} to Level of all Skills",
+    "level of all skills": "+{} to Level of all Skills",
+    "skill levels": "+{} to Level of all Skills",
     "life": "+{} to maximum Life",
     "maximum life": "+{} to maximum Life",
     "energy shield": "+{} to maximum Energy Shield",
@@ -213,7 +224,7 @@ _DEFAULT_LEVERS = [
     "{}% increased Damage",
     "{}% increased Attack Speed",
     "{}% increased Cast Speed",
-    "{}% increased Critical Strike Chance",
+    "{}% increased Critical Hit Chance",
     "{}% increased Critical Damage Bonus",
     "Damage Penetrates {}% Elemental Resistances",
     "+{} to maximum Life",

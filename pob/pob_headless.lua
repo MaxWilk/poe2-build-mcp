@@ -73,6 +73,9 @@ local function collectStats(keys)
 	return res
 end
 
+-- PoE2 ascendancy point cap (a separate pool from passive points) — mirrors PoB's Build.lua ascMax.
+local ASCENDANCY_POINT_MAX = 8
+
 -- Normal passive points available at the current level: 1 per level past 1, plus the
 -- cumulative quest points unlocked by that level (mirrors PoB's EstimatePlayerProgress).
 local function availablePoints()
@@ -781,7 +784,9 @@ function methods.get_build()
 		end
 	end
 
-	local used = spec:CountAllocNodes()
+	-- CountAllocNodes returns regular-passive count FIRST, ascendancy SECOND (they're separate point
+	-- budgets in PoE2). pointsUsed/Available are PASSIVE only; ascendancy is its own 8-point pool.
+	local used, ascUsed = spec:CountAllocNodes()
 	local avail = availablePoints()
 	local unspent = math.max(0, avail - used)
 	local r = {
@@ -798,9 +803,21 @@ function methods.get_build()
 		pointsUsed = used,
 		pointsAvailable = avail,
 		unspentPoints = unspent,
+		ascendancyPointsUsed = ascUsed,
+		ascendancyPointsMax = ASCENDANCY_POINT_MAX,
 		skillGroupCount = #(build.skillsTab.socketGroupList or {}),
 		stats = collectStats(),
 	}
+	-- The ascendancy pool is capped at 8 in PoE2; an over-allocated tree is illegal in game.
+	if ascUsed > ASCENDANCY_POINT_MAX then
+		r.ascendancyNote = "Ascendancy is OVER budget: "
+			.. ascUsed
+			.. " allocated but only "
+			.. ASCENDANCY_POINT_MAX
+			.. " ascendancy points exist — this build is not legal in game. Deallocate "
+			.. (ascUsed - ASCENDANCY_POINT_MAX)
+			.. " ascendancy node(s)."
+	end
 	-- An export with many unspent points reads to users as "missing" tree/campaign points; flag
 	-- it so the assistant spends them (or explains why they're parked).
 	if unspent > 3 then
@@ -1144,17 +1161,24 @@ function methods.optimize_passives(p)
 	local function greedyPass(nodeType, budgetLeft)
 		local spent = 0
 		while budgetLeft > 0 do
+			local _, ascUsed = spec:CountAllocNodes() -- ascendancy uses a SEPARATE 8-point pool
 			local calcFunc, calcBase = build.calcsTab:GetMiscCalculator(build)
 			local cands = {}
 			for _, node in pairs(spec.nodes) do
-				if
-					not node.alloc
-					and node.path
-					and node.type == nodeType
-					and node.pathDist
-					and node.pathDist <= budgetLeft
-				then
-					cands[#cands + 1] = node
+				if not node.alloc and node.path and node.type == nodeType and node.pathDist then
+					-- Each node must fit its OWN budget: ascendancy nodes the 8-point ascendancy pool,
+					-- regular nodes the passive budget — ascendancy must NOT consume passive points
+					-- (charging it to the passive budget both stranded passive points and let the
+					-- greedy allocate an illegal >8-point ascendancy).
+					local fits
+					if node.ascendancyName then
+						fits = (ascUsed + node.pathDist) <= ASCENDANCY_POINT_MAX
+					else
+						fits = node.pathDist <= budgetLeft
+					end
+					if fits then
+						cands[#cands + 1] = node
+					end
 				end
 			end
 			-- Stable total order (pathDist, then id) so the greedy is deterministic — `pairs` order
@@ -1189,8 +1213,12 @@ function methods.optimize_passives(p)
 			runCallback("OnFrame")
 			chosen[#chosen + 1] =
 				{ name = best.name, id = best.id, cost = bestCost, gain = bestGain, type = nodeType }
-			spent = spent + bestCost
-			budgetLeft = budgetLeft - bestCost
+			-- Only regular passives draw down the passive budget; ascendancy nodes spend the separate
+			-- ascendancy pool (capped above), so allocating them never strands passive points.
+			if not best.ascendancyName then
+				spent = spent + bestCost
+				budgetLeft = budgetLeft - bestCost
+			end
 		end
 		return spent
 	end

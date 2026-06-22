@@ -10,7 +10,7 @@
 
 ## Status — v1 functionally complete (2026-06)
 
-M0–M5 are implemented and verified: 61 MCP tools (compute, passives, corpus, live ops, optimize,
+M0–M5 are implemented and verified: 62 MCP tools (compute, passives, corpus, live ops, optimize,
 gear-crafting & build-maxing, self-update) with a golden-build pytest suite. Self-update (from
 validated releases) and a self-contained per-OS `.mcpb` pipeline ship in tagged CI releases.
 Recent surface: blended `optimize_item` (`goals`) with attainability/craft-effort,

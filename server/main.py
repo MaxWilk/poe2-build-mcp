@@ -10,6 +10,7 @@ assistant-facing operating guide via the MCP `instructions` channel.
 from __future__ import annotations
 
 import json
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -69,6 +70,44 @@ def _reset_engine() -> None:
         if _engine is not None:
             _engine.close()
             _engine = None
+
+
+# PoB-PoE2 (pinned) has the gem DATA for energy-based meta triggers (Cast on Critical, the
+# Invocations, Spell-on-Hit…) but NO calc that turns "energy generated on crit/hit" into a trigger
+# rate — so a socketed spell computes as a weak SELF-CAST, never the triggered nuke it is in game.
+# We can't invent the number (engine = source of truth), so surface the limitation wherever such a
+# gem appears, lest a triggered skill's tiny self-cast DPS be mistaken for its real damage.
+_META_TRIGGER_CAVEAT = (
+    "Engine limitation — this build uses an energy-based meta-trigger gem ({gems}). The pinned PoB "
+    "engine does NOT model the trigger rate of these gems: any socketed spell is computed as a weak "
+    "SELF-CAST, so its real TRIGGERED DPS is not reflected. Do not present this number as the "
+    "build's true damage. Trigger-meta archetypes (e.g. Cast on Critical → Comet, the ~1M-DPS meta) "
+    "can't be faithfully modelled until upstream PoB-PoE2 adds the energy-trigger calc — prefer an "
+    "archetype the engine CAN model (see build_advice), or flag the gap to the user."
+)
+
+
+def _gem_names_in(skill_text: str) -> list[str]:
+    """Best-effort gem names from PoB paste text (one gem per line, or ' / ', '|', ',' separated),
+    dropping the trailing '<level>/<quality> <count>' spec (the level slash has no spaces, so it
+    isn't mistaken for a gem separator)."""
+    names: list[str] = []
+    for chunk in re.split(r"[\n|,]+|\s+/\s+", skill_text or ""):
+        name = re.sub(
+            r"\s+\d[\d/ ]*$", "", chunk
+        ).strip()  # strip "20/20 1", keep Roman-numeral tiers
+        if name:
+            names.append(name)
+    return names
+
+
+def _flag_meta_trigger(result: dict[str, Any], gem_names: list[str]) -> dict[str, Any]:
+    """Attach the meta-trigger engine-limitation caveat to `result` if any gem is one (see above)."""
+    if isinstance(result, dict):
+        metas = corpus.meta_trigger_gems(gem_names)
+        if metas:
+            result["engineLimitation"] = _META_TRIGGER_CAVEAT.format(gems=", ".join(metas))
+    return result
 
 
 def _source_to_xml(source: str) -> str:
@@ -162,7 +201,13 @@ def get_build() -> dict[str, Any]:
     notables/keystones/ascendancy nodes, equipped gear by slot, passive points used, and
     summary stats — so you can see the whole build you've assembled.
     """
-    return get_engine().get_build()
+    build = get_engine().get_build()
+    names = (
+        [g.get("name", "") for g in (build.get("mainSkillGroup") or [])]
+        if isinstance(build, dict)
+        else []
+    )
+    return _flag_meta_trigger(build, names)
 
 
 @mcp.tool()
@@ -228,7 +273,7 @@ def set_skill(skill: str) -> dict[str, Any]:
     silently drop supports or corrupt the skill. Returns updated stats, plus `ProjectileCount` + a
     `dpsNote` for multi-projectile skills. For persistent buffs, use `add_skill_group`.
     """
-    return get_engine().paste_skill(skill)
+    return _flag_meta_trigger(get_engine().paste_skill(skill), _gem_names_in(skill))
 
 
 @mcp.tool()
@@ -246,7 +291,9 @@ def add_skill_group(skill: str, in_full_dps: bool = False) -> dict[str, Any]:
     aggregates into FullDPS. Leave it False for auras/heralds/buffs (otherwise their standalone
     damage inflates the combined number).
     """
-    return get_engine().add_skill_group(skill, include_in_full_dps=in_full_dps)
+    return _flag_meta_trigger(
+        get_engine().add_skill_group(skill, include_in_full_dps=in_full_dps), _gem_names_in(skill)
+    )
 
 
 @mcp.tool()
@@ -743,16 +790,18 @@ def optimize_supports(
     metric: str = "TotalDPS",
     goals: dict[str, float] | None = None,
     max_supports: int = 5,
-    candidates: int = 24,
+    candidates: int = 16,
 ) -> dict[str, Any]:
     """Choose the best support-gem set for the active main skill (engine-measured).
 
     Supports are usually a build's biggest "more" multiplier, but the corpus stores no support
-    MAGNITUDES — so this values them empirically: it greedily adds the support that most raises the
-    goal on the REAL build, round by round, until the skill's sockets are full or nothing helps.
-    Pass `goals` (weighted, e.g. {"TotalDPS":0.7,"TotalEHP":0.3}) to blend objectives; omit for a
-    single `metric`. Read-only (the build is restored); raise `candidates` for a wider search.
-    Apply the result with set_skill. Greedy, not a global optimum.
+    MAGNITUDES — so this values them empirically. It picks the candidate pool by MEASUREMENT, not
+    tags (solo-measuring each tag-relevant support and keeping the strongest, so premier levers like
+    penetration aren't missed just because they share few tags), then greedily adds the support that
+    most raises the goal on the REAL build, round by round, until the sockets are full or nothing
+    helps. Pass `goals` (weighted, e.g. {"TotalDPS":0.7,"TotalEHP":0.3}) to blend objectives; omit
+    for a single `metric`. Read-only (the build is restored); raise `candidates` for a wider greedy
+    search. Apply the result with set_skill. Greedy, not a global optimum.
     """
     return supportopt.optimize_supports(
         get_engine(), metric=metric, goals=goals, max_supports=max_supports, candidates=candidates
@@ -783,18 +832,29 @@ def plan_gear(
     dps_weight: float = 0.7,
     rolls: str = "realistic",
     slots: list[str] | None = None,
+    auto_base: bool = True,
+    min_ehp: float | None = None,
 ) -> dict[str, Any]:
     """Plan a whole gear set that maximizes damage while capping resistances (budget allocation).
 
     The cross-slot trade-off: limited suffix slots for resistances, so put them where they cost the
     least damage. This crafts OFFENSE slots damage-leaning and DEFENSE slots EHP-leaning (which pulls
     the missing resists onto the defensive pieces), building each slot on the previous so the plan is
-    coherent. `dps_weight` (0..1) tilts the offense slots. Returns the per-slot plan + projected
-    whole-build DPS/EHP/resists (+ whether capped); equip the items yourself with equip_item. Slots
-    need a base equipped (scaffold_gear first for a skeleton). A heavier call (~10s); greedy
-    heuristic, not a global optimum — refine individual slots with optimize_item.
+    coherent. `dps_weight` (0..1) tilts the offense slots. `auto_base` (default on) fills EMPTY
+    armour/jewellery slots with a sensible attribute-appropriate base, so it builds a WHOLE set from
+    scratch (weapons stay yours — they define the archetype). `min_ehp` sets a survivability floor:
+    defensive slots are re-crafted toward pure EHP until TotalEHP reaches it (reports `ehpFloorMet`).
+    Returns the per-slot plan + projected whole-build DPS/EHP/resists; equip the items with
+    equip_item. A heavier call (~10-20s); greedy heuristic — refine individual slots with optimize_item.
     """
-    return itemopt.plan_gear(get_engine(), dps_weight=dps_weight, rolls=rolls, slots=slots)
+    return itemopt.plan_gear(
+        get_engine(),
+        dps_weight=dps_weight,
+        rolls=rolls,
+        slots=slots,
+        auto_base=auto_base,
+        min_ehp=min_ehp,
+    )
 
 
 def _server_version() -> str:
@@ -1080,6 +1140,41 @@ def get_unique(name: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+def relevant_uniques(limit: int = 15) -> dict[str, Any]:
+    """Surface unique items + unique JEWELS that synergize with the ACTIVE build (corpus suggestions).
+
+    Matches the active main skill's scaling — its damage type, skill type (spell/attack/projectile/…)
+    and the skill name — against unique mod text, ranked by how many match. Uniques often DEFINE or
+    ENABLE a build (extra projectiles, "+levels to skills", a converted mechanic), and unique JEWELS
+    (Voices, Megalomaniac, …) supply the passive/notable density meta trees lean on — exactly the
+    power a from-scratch, rare-only build misses. These are CANDIDATES, not verified: a unique often
+    enables a mechanic, so read full text with `get_unique`, then `equip_item` / `equip_jewel` and
+    measure the real delta — every number still comes from the engine.
+    """
+    b = get_engine().get_build()
+    skill = str(b.get("mainSkill") or "")
+    gem = corpus.get_gem(skill) if skill else None
+    tags = set(gem["tags"]) if gem and isinstance(gem.get("tags"), list) else set()
+    damage = {"fire", "cold", "lightning", "chaos", "physical"}
+    types = {"spell", "attack", "projectile", "minion", "melee", "area"}
+    keywords = sorted((tags & damage) | (tags & types))
+    if skill:
+        keywords.append(skill)
+    return {
+        "skill": skill,
+        "keywords": keywords,
+        "uniques": corpus.relevant_uniques(keywords, limit=limit) if keywords else [],
+        "uniqueJewels": corpus.search_uniques(item_type="jewel", limit=10),
+        "note": (
+            "Corpus suggestions matched to your build's scaling — NOT engine-verified. A unique often "
+            "ENABLES a mechanic, so read its full text (get_unique) before judging; then equip_item / "
+            "equip_jewel and measure the real delta. Unique jewels (e.g. Voices) are common "
+            "build-definers a rare-only build misses. Every number must come from the engine."
+        ),
+    }
+
+
+@mcp.tool()
 def corpus_info() -> dict[str, Any]:
     """Report the bundled game-data corpus version and entity counts."""
     return corpus.corpus_info()
@@ -1230,9 +1325,18 @@ def build_from_goal(goal: str, character_class: str = "") -> str:
         "attack skill equip a weapon FIRST (equip_item) so DPS computes → optimize_supports for the "
         "best support set → allocate the ascendancy (often the build's biggest multiplier) + "
         "optimize_passives (metric='balanced' to raise offense AND defense) → gear it: plan_gear for "
-        "a whole-set first pass (or optimize_item per slot with goals={'TotalDPS':..,'TotalEHP':..} "
-        "for blends), optimize_jewel for jewels, rank_upgrades to find the next slot to improve → "
-        "apply_combat_profile for the realistic fight.\n\n"
+        "a whole-set first pass (auto-bases empty slots; pass min_ehp for a survivability floor), or "
+        "optimize_item per slot with goals={'TotalDPS':..,'TotalEHP':..} for blends, optimize_jewel "
+        "for jewels, rank_upgrades for the next slot → check relevant_uniques for build-defining "
+        "uniques + unique jewels (the leap past the ~100k rare-only ceiling; verify each on the "
+        "engine) → apply_combat_profile for the realistic fight.\n\n"
+        "Commit to a dominant multiplier and an archetype the ENGINE CAN MODEL, early: pinnacle DPS "
+        "comes from a committed multiplier (crit, ailment/DoT, minions, '+levels', a 'more'/penetration "
+        "stack), not slot-by-slot tuning — a half-built lane reads weak per slot, so judge it once "
+        "stacked across tree + several gear pieces. IMPORTANT: the engine does NOT model energy-based "
+        "meta TRIGGERS (Cast on Critical, the Invocations) — a socketed spell computes as a weak "
+        "SELF-CAST (tools flag `engineLimitation`), so don't build toward or cost a trigger-meta "
+        "archetype; pick a directly cast/attacked skill and tell the player about the gap.\n\n"
         "A build is NOT done until it clears a real bar (see build_advice('targets')): resists "
         "capped, a full gear set, a meaningful hit pool, DPS that clears the player's content, and "
         "sustain. CONFIRM with get_defenses + evaluate_build against explicit goals; sanity-check "
