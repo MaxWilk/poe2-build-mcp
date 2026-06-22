@@ -688,6 +688,31 @@ def test_optimize_passives_respects_separate_ascendancy_budget(engine):
     assert "ascendancyNote" not in b  # not over budget -> no warning
 
 
+def test_optimize_passives_default_full_and_honest_remaining(engine):
+    # Footgun fix: the MCP tool defaults points=0 (allocate the WHOLE tree, the usual intent), and a
+    # CAPPED `points` call reports the build's TRUE unspent passive points — not a budget-relative 0
+    # that misreads as "tree fully allocated" (which had a bare call ship a 3-point tree).
+    import inspect
+
+    from server import main
+
+    fn = getattr(main.optimize_passives, "__wrapped__", main.optimize_passives)
+    assert inspect.signature(fn).parameters["points"].default == 0
+
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(95)
+    engine.paste_skill("Lightning Spear 20/20 1")
+    engine.add_item(
+        "Rarity: Rare\nW\nGrand Spear\nAdds 50 to 400 Lightning Damage\n"
+        "+4 to Level of all Projectile Skills",
+        slot="Weapon 1",
+    )
+    capped = engine.optimize_passives(metric="TotalDPS", points=5)
+    assert capped["pointsUsed"] == 5
+    assert capped["pointsRemaining"] > 50  # TRUE unspent (~113 free), not a misleading 0
+
+
 def test_damage_diagnostic_silent_when_computable(engine):
     engine.new_build()
     engine.set_class("Witch", "Infernalist")

@@ -75,8 +75,10 @@ def _seg(metadata_id: str) -> str:
 LINK_RE = re.compile(r"\[(?:[^\]|]*\|)?([^\]]+)\]")
 CURLY_RE = re.compile(r"\{[^}]*\}")
 BLOCK_RE = re.compile(r"\[\[(.*?)\]\]", re.DOTALL)
-# PoB metadata lines inside a unique block that aren't readable mods (drop from the text).
-UNIQUE_META_RE = re.compile(r"^(Variant:|Selected Variant:|Implicits:|Has Alt Variant)")
+# PoB metadata lines inside a unique block that aren't readable mods (drop from the text). `Source:`
+# is a drop-location line that, unfiltered, was mistaken for the base on items whose base follows it
+# (e.g. Hand of Wisdom and Action -> its real base "Furtive Wraps" sits after the Source line).
+UNIQUE_META_RE = re.compile(r"^(Variant:|Selected Variant:|Implicits:|Has Alt Variant|Source:)")
 
 
 def clean_text(t: str) -> str:

@@ -1237,24 +1237,28 @@ function methods.optimize_passives(p)
 	used = used + requiredSpent
 
 	local mo1 = build.calcsTab.mainOutput
+	-- TRUE unspent PASSIVE points on the build (not the local greedy budget) so a capped `points`
+	-- call never misreads as "fully allocated" when the tree still has points free. (Ascendancy is a
+	-- separate pool, reported elsewhere.)
+	local unspent = math.max(0, availablePoints() - (spec:CountAllocNodes()))
 	local result = {
 		metric = p.goals and "weighted" or metric,
 		pointsUsed = used,
-		pointsRemaining = math.max(0, budget),
+		pointsRemaining = unspent,
 		smallNodePoints = smallUsed,
 		requiredPoints = requiredSpent,
 		allocated = chosen,
 	}
-	if used - requiredSpent == 0 and budget > 0 then
+	if used - requiredSpent == 0 and unspent > 0 then
 		result.note = "The optimizer allocated NOTHING — no reachable node improved the goal, though "
-			.. budget
-			.. " points are available. Likely the metric doesn't scale off the passive tree for this "
-			.. "skill (e.g. an uncomputable / placeholder-damage skill — verify with explain_mechanic "
-			.. "/ relevant_mechanics), or the reachable nodes simply don't move this goal."
-	elseif budget > 5 then
-		result.note = budget
-			.. " points still unspent — no remaining notable or small node improved the goal from "
-			.. "here. Try different goals/weights, a different node_type, or alloc_passive toward a "
+			.. unspent
+			.. " passive points are unspent. Likely the metric doesn't scale off the passive tree for "
+			.. "this skill (e.g. an uncomputable / placeholder-damage skill — verify with "
+			.. "explain_mechanic / relevant_mechanics), or the reachable nodes simply don't move it."
+	elseif unspent > 5 then
+		result.note = unspent
+			.. " passive points still unspent — either raise `points` (it caps allocation; pass 0 for "
+			.. "the whole tree), try different goals/weights or node_type, or alloc_passive toward a "
 			.. "specific cluster; otherwise they're parked for later gear/scaling (say so)."
 	end
 	-- start/final for every reported metric

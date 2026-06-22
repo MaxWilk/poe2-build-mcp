@@ -672,7 +672,7 @@ def dealloc_passive(node: str | int) -> dict[str, Any]:
 @mcp.tool()
 def optimize_passives(
     metric: str = "TotalDPS",
-    points: int = 3,
+    points: int = 0,
     node_type: str = "Notable",
     candidates: int = 50,
     goals: dict[str, float] | None = None,
@@ -688,8 +688,11 @@ def optimize_passives(
       contributes nothing — fix the base first.
 
     `require=[node ids/names]` allocates those nodes (+ shortest path) first, then optimizes the
-    rest. Pass `points=0` to use the full remaining budget (slower). Returns chosen nodes with
-    per-step gains and start/final per goal metric. Bounded greedy search, not a global optimum.
+    rest. `points` defaults to 0 = the FULL remaining passive budget (the usual intent — allocate the
+    whole tree); pass a positive number only to CAP allocation (faster, for an incremental tweak).
+    Ascendancy is a SEPARATE 8-point pool, auto-allocated on top regardless of `points`. Returns
+    chosen nodes with per-step gains and start/final per goal metric; `pointsRemaining` is the build's
+    TRUE unspent passive points. Bounded greedy search, not a global optimum.
     """
     return get_engine().optimize_passives(
         metric=metric,

@@ -22,6 +22,29 @@ def test_counts():
     assert counts["mechanics"] > 20  # wiki mechanics tier (schema_version 4)
 
 
+def test_unique_parse_skips_source_line_for_base():
+    # Regression: a "Source:" drop line must be filtered, not mistaken for the unique's base — the
+    # real base (e.g. Hand of Wisdom and Action -> "Furtive Wraps") follows it in the PoB block.
+    from pipeline.build_corpus import UNIQUE_META_RE, clean_mod_line
+
+    block = (
+        "Hand of Wisdom and Action\n"
+        "Variant: Current\n"
+        "Source: Drops from unique{Xesht, We That Are One} in normal{Twisted Domain}\n"
+        "{variant:1}Furtive Wraps\n"
+        "+(15-25) to Dexterity\n"
+    )
+    lines = [
+        ln
+        for ln in (x.rstrip() for x in block.strip("\n").split("\n"))
+        if ln.strip() and not UNIQUE_META_RE.match(ln.strip())
+    ]
+    assert clean_mod_line(lines[0]) == "Hand of Wisdom and Action"
+    assert clean_mod_line(lines[1]) == "Furtive Wraps"  # the base, not the Source: line
+    assert UNIQUE_META_RE.match("Source: anything")  # the filter that prevents the regression
+    assert not UNIQUE_META_RE.match("Furtive Wraps")  # a real base must pass through
+
+
 def test_get_gem_fireball():
     g = db.get_gem("Fireball")
     assert g and g["gem_type"] == "active"
