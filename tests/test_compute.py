@@ -10,8 +10,10 @@ from pathlib import Path
 
 import pytest
 
+from server.compute import buildopt, craftopt, itemopt
 from server.compute.engine import PobEngine
 from server.compute.pob_code import decode_code, encode_code
+from server.knowledge import db, refbuilds
 
 FIREBALL_DPS = 124.833
 FIREBALL_AVG = 149.8
@@ -713,6 +715,35 @@ def test_optimize_passives_default_full_and_honest_remaining(engine):
     assert capped["pointsRemaining"] > 50  # TRUE unspent (~113 free), not a misleading 0
 
 
+def test_optimize_passives_require_respects_budget_and_reset(engine):
+    # Footgun fix: requiring nodes on an already-full tree must NOT over-allocate into an illegal
+    # (>budget) tree — it skips + reports them. reset=True re-plans from scratch so the required
+    # nodes (e.g. jewel sockets) fit within budget — the clean way to add sockets to a full tree.
+    engine.new_build()
+    engine.set_class("Huntress", "Amazon")
+    engine.set_level(100)
+    engine.paste_skill("Lightning Spear 20/20  1")
+    engine.add_item(
+        "Rarity: Rare\nW\nGrand Spear\nAdds 50 to 400 Lightning Damage\n"
+        "+4 to Level of all Projectile Skills\n90% increased Elemental Damage with Attacks",
+        slot="Weapon 1",
+    )
+    engine.optimize_passives(metric="TotalDPS", points=0)  # full tree
+
+    # require on a FULL tree must skip (not over-allocate) and report what it skipped
+    r = engine.optimize_passives(metric="TotalDPS", points=0, require=[2491, 7960, 21984])
+    over = engine.get_build()
+    assert over["pointsUsed"] <= over["pointsAvailable"]  # NOT over-budget (the footgun)
+    assert r.get("requireSkipped")  # unfittable required nodes are surfaced
+
+    # reset=True re-plans the whole tree, fitting the required jewel sockets within budget
+    engine.optimize_passives(metric="TotalDPS", points=0, reset=True, require=[21984, 32763])
+    after = engine.get_build()
+    assert after["pointsUsed"] <= after["pointsAvailable"]
+    socks = [s["socket"] for s in engine.call("list_jewel_sockets")["sockets"] if s["allocated"]]
+    assert 21984 in socks and 32763 in socks  # the required sockets got allocated
+
+
 def test_damage_diagnostic_silent_when_computable(engine):
     engine.new_build()
     engine.set_class("Witch", "Infernalist")
@@ -890,3 +921,136 @@ def test_blank_luajit_override_is_ignored(monkeypatch):
         assert eng.ping()["pong"] is True
     finally:
         eng.close()
+
+
+# -- optimize_build (holistic whole-build optimizer) ---------------------------------------
+
+
+def test_buildopt_lever_mapping():
+    # Reference topLever names map to the right tree-cluster query (the seed commitment); a
+    # gear/gem-driven lever (+levels) maps to None (≈ the balanced pass).
+    assert buildopt._lever_tree_query("+N% to Critical Damage Bonus", ["lightning"]) == "critical"
+    assert buildopt._lever_tree_query("N% increased Attack Speed", []) == "attack speed"
+    assert (
+        buildopt._lever_tree_query("Damage Penetrates N% Lightning Resistance", ["lightning"])
+        == "lightning penetration"
+    )
+    assert buildopt._lever_tree_query("+N to Level of all Skills", ["fire"]) is None
+
+
+def test_buildopt_unique_item_text():
+    # The corpus `text` leads with name/base (and maybe a League line); the builder must not
+    # duplicate them into the mod block, and must drop the League line.
+    txt = buildopt._unique_item_text(
+        {
+            "name": "Foo",
+            "base": "Bar Hat",
+            "text": "Foo\nBar Hat\nLeague: X\n+10 to maximum Life\n20% increased Fire Damage",
+        }
+    )
+    assert txt.startswith("Rarity: Unique\nFoo\nBar Hat\n--------\n")
+    assert "League:" not in txt
+    assert txt.count("Foo") == 1  # name not doubled into the mods
+    assert "+10 to maximum Life" in txt
+
+
+def test_archetype_levers_seeds_from_reference_set():
+    # The reference set seeds optimize_build's candidate levers; +levels is the dominant one.
+    levs = refbuilds.archetype_levers(["spell"])
+    assert levs and "+N to Level of all Skills" in levs
+
+
+def test_optimize_build_rejects_unset_build(engine):
+    # Guards: no main skill, and a level too low to allocate a tree (an empty tree is misleading).
+    engine.new_build()
+    engine.set_class("Sorceress")
+    engine.set_level(90)
+    r = buildopt.optimize_build(engine, levers=[], passes=1)
+    assert not r["ok"] and "skill" in r["error"].lower()
+
+    engine.set_level(5)
+    engine.paste_skill("Fireball 20/20  1")
+    r = buildopt.optimize_build(engine, levers=[], passes=1)
+    assert not r["ok"] and "level" in r["error"].lower()
+
+
+def test_optimize_build_smoke(engine):
+    # Integration: the holistic optimizer assembles a whole build (tree + gear + jewels + supports)
+    # that beats the bare skill, caps resistances, and is left LOADED in the session. Slow (~30s).
+    _spark_caster(engine)
+    bare = engine.paste_skill("Spark 20/20  1")["stats"]["TotalDPS"]
+    r = buildopt.optimize_build(engine, levers=[], passes=1, max_jewel_sockets=1, min_ehp=None)
+    assert r["ok"], r
+    assert r["committed"] == "balanced"  # levers=[] -> only the balanced candidate
+    res = r["result"]
+    assert (res["TotalDPS"] or 0) > bare  # synthesis added real DPS over the bare skill
+    assert res["resistsCapped"] is True  # the defensive constraint held
+    # the winner is loaded in the session, so the live engine matches the reported result
+    live = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    assert live == pytest.approx(res["TotalDPS"], rel=1e-3)
+
+
+# -- crafting system (runes + essences + corruptions, from PoB's own data) ------------------
+
+
+def test_craft_item_text_format():
+    # The item-text builder lays out runes (Sockets/Rune + {rune} implicits) and a corruption
+    # (implicit line + Corrupted) in the order PoB's parser accepts.
+    t = craftopt._build_item(
+        "Vaal Regalia",
+        ["+100 to maximum Life"],
+        [("Soul Core of X", ["+5% to all Elemental Resistances"])],
+        "+1 to Level of all Skills",
+    )
+    assert "Sockets: S" in t and "Rune: Soul Core of X" in t
+    assert "{rune}+5% to all Elemental Resistances" in t
+    assert "Implicits: 2" in t  # one rune line + one corruption implicit
+    assert t.strip().endswith("Corrupted")
+
+
+def test_crafting_options_surfaces_pob_data(engine):
+    # The shim surfaces PoB's own crafting data for a base: runes, corrupted implicits, and essences
+    # (including the beyond-pool Perfect essences) — all as ready item-text lines.
+    engine.new_build()
+    engine.set_class("Sorceress")
+    engine.set_level(92)
+    engine.paste_skill("Fireball 20/20  1")
+    base = db.pick_base("Body Armour", "int")
+    engine.add_item(f"Rarity: Rare\nA\n{base}\n--------\n+50 to maximum Life", slot="Body Armour")
+    co = engine.crafting_options("Body Armour")
+    assert co["ok"]
+    assert co["runes"] and co["corruptions"] and co["essences"]
+    assert any(e.get("special") for e in co["essences"])  # Perfect (beyond-pool) essences present
+
+
+def test_optimize_build_crafting_keeps_resists_capped(engine):
+    # The crafting post-pass re-crafts every slot independently, which can strip the cross-slot resist
+    # balance plan_gear set up. The re-cap pass must restore it — a crafted build must stay capped.
+    # Slow (~2 min): full crafting on a whole gear set.
+    _spark_caster(engine)
+    engine.paste_skill("Spark 20/20  1")
+    r = buildopt.optimize_build(
+        engine, levers=[], passes=1, max_jewel_sockets=0, min_ehp=None, crafting=True
+    )
+    assert r["ok"], r
+    res = r["result"]
+    assert res["craftedGear"]  # crafting actually ran on the gear
+    assert res["resistsCapped"] is True  # crafting must NOT break the resist cap
+
+
+def test_craft_item_beats_plain_rare(engine):
+    # craft_item adds the crafting system on top of the best rare, so it must not be worse than a
+    # plain optimize_item rare, and should actually engage at least one crafting method. Slow (~15s).
+    engine.new_build()
+    engine.set_class("Sorceress")
+    engine.set_level(92)
+    engine.paste_skill("Fireball 20/20  1")
+    base = db.pick_base("Body Armour", "int")
+    plain = itemopt.optimize_item(engine, "Body Armour", metric="TotalEHP", base=base)
+    crafted = craftopt.craft_item(
+        engine, "Body Armour", metric="TotalEHP", base=base, rune_sockets=2
+    )
+    assert crafted["ok"], crafted
+    assert (crafted["metricCrafted"] or 0) >= (plain["metricAfter"] or 0)
+    c = crafted["crafting"]
+    assert c["runes"] or c["essencesUsed"] or c["corruptedImplicit"]  # crafting actually engaged

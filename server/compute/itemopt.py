@@ -98,13 +98,16 @@ def optimize_item(
     thorough: bool = False,
     keep_resists_capped: bool = True,
     goals: dict[str, float] | None = None,
+    extra_mods: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Craft the best-in-slot rare for a single `metric`, or a weighted blend via `goals`.
 
     `goals` (e.g. {"TotalDPS": .6, "TotalEHP": .4}) scores each candidate by the weighted sum of
     *relative* gains vs the bare base, so a single craft balances offense and defense (real endgame
     gear is blended, not pure-DPS or pure-EHP). Omit `goals` for the single-`metric` behaviour.
-    See the module docstring.
+    `extra_mods` ({"prefixes":[...], "suffixes":[...]} of affix_pool-shaped dicts) injects extra
+    candidate affixes beyond the base's natural pool — used by the crafting layer to offer
+    essence-only mods (e.g. a Perfect Essence's % Life on body armour). See the module docstring.
     """
     build = engine.get_build()
     gear = build.get("gear") or {}
@@ -130,6 +133,11 @@ def optimize_item(
     keys = list(weights) if weights else [metric]
 
     pool = db.affix_pool(base, ilvl=ilvl)
+    # Inject extra candidate affixes (e.g. essence-only mods the natural pool can't roll) so the same
+    # greedy values them against the pool, respecting prefix/suffix caps + group exclusivity.
+    if extra_mods:
+        pool["prefixes"] = list(pool["prefixes"]) + list(extra_mods.get("prefixes") or [])
+        pool["suffixes"] = list(pool["suffixes"]) + list(extra_mods.get("suffixes") or [])
     pre = [
         {
             "group": m["group"],

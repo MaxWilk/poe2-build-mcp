@@ -11,14 +11,17 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_REPO_ROOT))
 
 from server.compute.engine import PobEngine  # noqa: E402
 
 
 @pytest.fixture(scope="session")
 def engine():
-    eng = PobEngine()
+    # Pin the engine to the REPO shim — paths.pob_headless_script() otherwise prefers an installed
+    # user-data copy, which would shadow repo edits and make the suite test stale code.
+    eng = PobEngine(script=_REPO_ROOT / "pob" / "pob_headless.lua")
     yield eng
     eng.close()
 

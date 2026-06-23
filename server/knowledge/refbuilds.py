@@ -120,6 +120,27 @@ def _placement(value: float, dist: dict[str, Any] | None) -> str:
     return "within the reference range"
 
 
+def archetype_levers(delivery: list[str] | None = None, limit: int = 6) -> list[str]:
+    """The candidate scaling levers for an archetype (matched by `delivery`), most-common first.
+
+    Unions the `topLevers` of the reference builds that share this delivery (spell/attack/projectile/
+    …) and orders them by how many references list each — so optimize_build can SEED its commit-and-max
+    search with the levers this archetype actually scales on, instead of flailing. Calibration data,
+    not a template: the levers say *what to try committing*, the engine says whether it paid off.
+    """
+    d = _data()
+    builds = [b for b in (d.get("builds") or []) if b.get("dpsComputable")]
+    want = {t.lower() for t in (delivery or [])}
+    subset = [b for b in builds if want & set(b.get("delivery") or [])] or builds
+    counter: Counter[str] = Counter()
+    for b in subset:
+        for tl in b.get("topLevers") or []:
+            lev = tl.get("lever")
+            if lev:
+                counter[lev] += 1
+    return [lev for lev, _ in counter.most_common(limit)]
+
+
 def benchmark(
     total_dps: float | None,
     full_dps: float | None,

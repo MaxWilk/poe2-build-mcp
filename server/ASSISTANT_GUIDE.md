@@ -46,8 +46,10 @@ together and how to avoid the common mistakes.
 
 - **Computed (engine — authoritative for *this* build):** `get_build_stats`, `get_defenses`,
   `evaluate_build`, `compare_to`, `solve_for`, `rank_levers`, `optimize_passives`, `optimize_item`,
-  `optimize_jewel`, `optimize_supports`, `rank_upgrades`, `plan_gear`,
-  `alloc_passive`/`dealloc_passive`, `scaffold_gear`, `search_passives`/`get_passive` (query the
+  `optimize_jewel`, `optimize_supports`, `rank_upgrades`, `plan_gear`, `craft_item` (full crafting
+  system), `optimize_build` (the holistic whole-build optimizer), `alloc_passive`/`dealloc_passive`,
+  `scaffold_gear`,
+  `search_passives`/`get_passive` (query the
   active tree, with `pathDist` reachability), `engine_health`, and every `set_*`/`equip_*` mutator
   (they return fresh stats). Exact for the current build state.
 - **Looked-up (corpus — offline, deterministic):** `search_items`/`get_item`,
@@ -113,10 +115,20 @@ realize it, then re-check defenses.
 ## Which tool when
 
 - Max a gear slot → `optimize_item` (pass `goals={…}` for a damage+defense **blend**, not a
-  one-axis craft). Which slot to upgrade next → `rank_upgrades`. Shape the tree → `optimize_passives(goals=…)`.
+  one-axis craft). The BEST possible piece (beyond a plain rare — runes + Perfect essences + a
+  corruption, each engine-valued) → `craft_item`; it returns the `craftSteps` to make it. Which slot
+  to upgrade next → `rank_upgrades`. Shape the tree → `optimize_passives(goals=…)`.
 - Best support-gem set → `optimize_supports` (engine-measured — supports have no corpus magnitudes).
   Craft a jewel → `optimize_jewel` (then `equip_jewel`). Gear a whole set at once (damage-max with
   resists capped) → `plan_gear`, then refine top slots with `rank_upgrades` + `optimize_item`.
+- Assemble a WHOLE build at once (the synthesis the per-slot tools can't do) → `optimize_build`.
+  Set class+ascendancy+main-skill (+a weapon base for attacks; set an endgame level) first; it then
+  SEEDS the archetype's dominant levers from the reference set and, for each, commits that lever
+  across tree + gear + jewels + supports and keeps the best resist-capped, `min_ehp`-meeting build —
+  leaving it LOADED. Heavy (~1–3 min). `try_uniques` adds a unique-item pass; `archetypes=[…]` also
+  evaluates alternative class/skill/weapon configs (you propose them, it picks). It reaches the
+  GEAR-QUALITY ceiling, not the crafting-system/trigger-meta top — afterward run `apply_combat_profile`
+  (the build's real conditions) and gate with `pinnacle_readiness`.
 - Which stat to chase next → `rank_levers`. How much of it to hit a target → `solve_for`
   (`list_levers` shows named levers). A/B two builds → `compare_to`.
 - "Is this build good?" → `evaluate_build` (numbers) + `build_advice("red flags")` (judgment).

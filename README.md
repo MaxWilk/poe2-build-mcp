@@ -65,7 +65,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (62 MCP tools)
+### The toolset (64 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -87,10 +87,12 @@ engine confirms the effect.
 - `alloc_passive(node)` / `dealloc_passive(node)` — allocate/route by id or name, with deltas
 - `optimize_passives(metric, points, goals?, require?)` — greedy allocation: one stat, `"balanced"`, or weighted `goals` (e.g. Life+Crit); can `require` nodes
 - `optimize_item(slot, metric?, goals?)` — craft a best-in-slot rare for one metric or a weighted `goals` blend (damage+defense); reports per-affix attainability (ilvl/tier) + craft-effort
+- `craft_item(slot, metric?, goals?)` — best-in-slot using the FULL crafting system: runes/soul cores + Perfect essences (beyond-pool mods) + corruptions, each engine-valued
 - `optimize_jewel(metric?, base?, goals?)` — craft the best rare jewel (then socket with `equip_jewel`)
 - `optimize_supports(metric?, goals?)` — pick the best support-gem set, measured on the engine
 - `rank_upgrades(metric?, goals?)` — rank gear slots by recraft gain ("what to upgrade next")
 - `plan_gear(dps_weight?)` — plan a whole gear set: damage-max with resists capped (cross-slot budget allocation)
+- `optimize_build(metric?, min_ehp?, levers?, try_uniques?, archetypes?)` — the holistic whole-build optimizer: archetype-seeded commit-and-max across tree + gear + jewels + supports (does the synthesis the per-slot tools can't); leaves the best build loaded
 - `scaffold_gear(pool?, target_resist?)` — fill empty defensive slots to close resist/pool gaps (baseline, not optimal)
 - `new_build()` — reset to a blank build (clean from-scratch start)
 - `engine_health()` — engine + install diagnostics (liveness, LuaJIT/tree/data/server versions)

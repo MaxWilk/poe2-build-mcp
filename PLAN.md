@@ -10,13 +10,15 @@
 
 ## Status — v1 functionally complete (2026-06)
 
-M0–M5 are implemented and verified: 62 MCP tools (compute, passives, corpus, live ops, optimize,
+M0–M5 are implemented and verified: 64 MCP tools (compute, passives, corpus, live ops, optimize,
 gear-crafting & build-maxing, self-update) with a golden-build pytest suite. Self-update (from
 validated releases) and a self-contained per-OS `.mcpb` pipeline ship in tagged CI releases.
 Recent surface: blended `optimize_item` (`goals`) with attainability/craft-effort,
-`optimize_supports`, `optimize_jewel`, `rank_upgrades`, `plan_gear`, the reference-build library
-(`list_reference_builds` / `benchmark_build`), and `get_meta_builds`. Per-level gem stats / support
-magnitudes remain deferred (needs a stat-translation ingestion layer).
+`optimize_supports`, `optimize_jewel`, `rank_upgrades`, `plan_gear`, `craft_item` (the FULL crafting
+system — runes + Perfect essences + corruptions, from PoB's own data), `optimize_build` (the holistic
+whole-build optimizer — archetype-seeded commit-and-max; see [docs/build-optimizer-spec.md](docs/build-optimizer-spec.md)),
+the reference-build library (`list_reference_builds` / `benchmark_build`), and `get_meta_builds`.
+Per-level gem stats / support magnitudes remain deferred (needs a stat-translation ingestion layer).
 See [PACKAGING.md](PACKAGING.md) and [README.md](README.md).
 
 ---

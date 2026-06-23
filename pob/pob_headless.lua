@@ -604,6 +604,93 @@ function methods.add_item(p)
 	return { ok = true, slot = slotOrErr, stats = collectStats(p.keys) }
 end
 
+-- Surface PoB's OWN crafting data (runes / soul cores, corrupted implicits, essence-forced mods)
+-- applicable to the item in `slot`, resolved to ready-to-use item-text mod lines. The Python craft
+-- layer assembles candidate items from these and values them on the engine — PoB owns the data and
+-- the math, so this never invents a number. (Runes apply automatically from `Sockets:`/`Rune:` lines;
+-- a corrupted implicit is an implicit line on a `Corrupted` item; an essence forces one explicit mod.)
+function methods.crafting_options(p)
+	assert(p and p.slot, "crafting_options requires params.slot")
+	local sc = build.itemsTab.slots[p.slot]
+	local item = sc and sc.selItemId and sc.selItemId ~= 0 and build.itemsTab.items[sc.selItemId]
+	if not item or not item.base then
+		return { ok = false, error = "no item in slot '" .. tostring(p.slot) .. "' — equip a base first." }
+	end
+	local base = item.base
+	local tags = base.tags or {}
+	local itemType = base.type and base.type:lower() or ""
+	local subType = base.subType and base.subType:lower()
+	local baseType = (base.weapon and "weapon") or (base.armour and "armour")
+		or ((tags.wand or tags.staff or tags.sceptre) and "caster") or nil
+	local specificType = (subType == "warstaff" and "warstaff")
+		or (itemType == "shield" and subType == "evasion" and "buckler") or itemType
+
+	-- runes / soul cores: those whose data has an entry for this item's rune-type keys. Match PoB's
+	-- UpdateRunes (baseType + specificType only) and DEDUPE — specificType defaults to itemType, so a
+	-- naive {baseType, specificType, itemType} would double-count a rune's mods on most items.
+	local runes = {}
+	for name, rdata in pairs(data.itemMods.Runes or {}) do
+		local mods, seen = {}, {}
+		for _, key in ipairs({ baseType, specificType }) do
+			if key and not seen[key] and rdata[key] then
+				seen[key] = true
+				for _, line in ipairs(rdata[key]) do
+					mods[#mods + 1] = line
+				end
+			end
+		end
+		if #mods > 0 then
+			runes[#runes + 1] = { name = name, mods = mods }
+		end
+	end
+
+	-- corrupted implicits: those whose weightKey (weight > 0) intersects this base's tags
+	local corruptions = {}
+	for _, m in pairs(data.itemMods.Corruption or {}) do
+		local applies = false
+		if m.weightKey then
+			for i, k in ipairs(m.weightKey) do
+				if (m.weightVal[i] or 0) > 0 and tags[k] then
+					applies = true
+					break
+				end
+			end
+		end
+		if applies and m[1] then
+			corruptions[#corruptions + 1] = { line = m[1], group = m.group }
+		end
+	end
+
+	-- essences: those that force a mod on this item class, resolved to the mod's stat line. `special`
+	-- marks the beyond-the-normal-pool mods (Perfect essences — % Life, "damage as extra", …).
+	local essences = {}
+	for _, e in pairs(data.essences or {}) do
+		local modId = e.mods and e.mods[base.type]
+		local m = modId and data.itemMods.Item[modId]
+		if m and m[1] then
+			essences[#essences + 1] = {
+				name = e.name,
+				tier = e.tierLevel,
+				stat = m[1],
+				modType = m.type,
+				group = m.group,
+				special = modId:find("^Essence") ~= nil,
+			}
+		end
+	end
+
+	return {
+		ok = true,
+		slot = p.slot,
+		base = base.name or base.type,
+		runeType = baseType,
+		itemType = itemType,
+		runes = runes,
+		corruptions = corruptions,
+		essences = essences,
+	}
+end
+
 -- List the passive tree's jewel sockets so a jewel can be placed. A jewel only contributes when its
 -- socket node is ALLOCATED; `filled` shows whether one is already socketed there.
 function methods.list_jewel_sockets()
@@ -1097,12 +1184,34 @@ function methods.optimize_passives(p)
 	if not goals and balanced then
 		goals = { TotalDPS = 1, TotalEHP = 1 }
 	end
+	local spec = build.spec
+	-- `reset`: deallocate all REGULAR (non-ascendancy) nodes first so the tree is RE-PLANNED from
+	-- scratch — e.g. to add jewel sockets — instead of accumulating on top of an already-full tree
+	-- (which silently produced an over-budget, illegal tree). Ascendancy + class start are kept.
+	if p.reset then
+		local clear = {}
+		for _, node in pairs(spec.allocNodes) do
+			if
+				node.type ~= "ClassStart"
+				and node.type ~= "AscendClassStart"
+				and not node.ascendancyName
+			then
+				clear[#clear + 1] = node
+			end
+		end
+		for _, node in ipairs(clear) do
+			if node.alloc then
+				spec:DeallocNode(node)
+			end
+		end
+		build.buildFlag = true
+		runCallback("OnFrame")
+	end
 	local budget = p.points
 	if not budget or budget <= 0 then
-		budget = math.max(0, availablePoints() - build.spec:CountAllocNodes())
+		budget = math.max(0, availablePoints() - spec:CountAllocNodes())
 	end
 	local cap = p.candidates or 50
-	local spec = build.spec
 	local chosen = {}
 
 	-- metrics we will report start/final for
@@ -1120,19 +1229,34 @@ function methods.optimize_passives(p)
 		startVals[m] = (mo0[m]) or 0
 	end
 
-	-- `require`: allocate the named nodes (+ shortest path) before optimizing, so they're included.
+	-- `require`: allocate the named nodes (+ shortest path) before optimizing. This RE-PLANS the tree
+	-- around them, so it only makes sense on a FRESH tree — requiring nodes on top of an already-full
+	-- tree silently over-allocates into an illegal (>budget) tree (the footgun). So: if regular nodes
+	-- are already allocated and `reset` wasn't asked, skip the requires + tell the caller to reset.
+	-- On a fresh/reset tree pathDist is the true point cost, so we cap allocation to the budget.
 	local requiredSpent = 0
-	if type(p.require) == "table" then
-		for _, ref in ipairs(p.require) do
-			local n = findNode(ref)
-			if n and not n.alloc and n.path then
-				local u0 = spec:CountAllocNodes()
-				spec:AllocNode(n, nil)
-				build.buildFlag = true
-				runCallback("OnFrame")
-				local spent = spec:CountAllocNodes() - u0
-				requiredSpent = requiredSpent + spent
-				chosen[#chosen + 1] = { name = n.name, id = n.id, cost = spent, required = true }
+	local requireSkipped = {}
+	if type(p.require) == "table" and #p.require > 0 then
+		if spec:CountAllocNodes() > 0 and not p.reset then
+			for _, ref in ipairs(p.require) do
+				local n = findNode(ref)
+				requireSkipped[#requireSkipped + 1] = (n and n.name) or tostring(ref)
+			end
+		else
+			for _, ref in ipairs(p.require) do
+				local n = findNode(ref)
+				if n and not n.alloc and n.path then
+					if (n.pathDist or 1) <= (budget - requiredSpent) then
+						local u0 = spec:CountAllocNodes()
+						spec:AllocNode(n, nil)
+						build.buildFlag = true
+						runCallback("OnFrame")
+						requiredSpent = requiredSpent + (spec:CountAllocNodes() - u0)
+						chosen[#chosen + 1] = { name = n.name, id = n.id, required = true }
+					else
+						requireSkipped[#requireSkipped + 1] = n.name or tostring(ref)
+					end
+				end
 			end
 		end
 		budget = math.max(0, budget - requiredSpent)
@@ -1249,6 +1373,15 @@ function methods.optimize_passives(p)
 		requiredPoints = requiredSpent,
 		allocated = chosen,
 	}
+	-- Required nodes that didn't fit the budget (would have over-allocated the tree) — surface them
+	-- so the caller knows to free points or pass reset=true, rather than silently shipping an
+	-- illegal over-budget tree.
+	if #requireSkipped > 0 then
+		result.requireSkipped = requireSkipped
+		result.requireNote = #requireSkipped
+			.. " required node(s) didn't fit the passive budget and were skipped (the tree would be "
+			.. "over-budget). Free points first or pass reset=true to re-plan the tree from scratch."
+	end
 	if used - requiredSpent == 0 and unspent > 0 then
 		result.note = "The optimizer allocated NOTHING — no reachable node improved the goal, though "
 			.. unspent

@@ -20,6 +20,8 @@ from mcp.server.fastmcp import FastMCP
 from . import paths
 from . import scaffold
 from .compute.engine import PobEngine
+from .compute import buildopt
+from .compute import craftopt
 from .compute import itemopt
 from .compute import solver
 from .compute import supportopt
@@ -677,6 +679,7 @@ def optimize_passives(
     candidates: int = 50,
     goals: dict[str, float] | None = None,
     require: list[str | int] | None = None,
+    reset: bool = False,
 ) -> dict[str, Any]:
     """Greedily allocate passive points to maximize a goal on the active build.
 
@@ -688,11 +691,14 @@ def optimize_passives(
       contributes nothing — fix the base first.
 
     `require=[node ids/names]` allocates those nodes (+ shortest path) first, then optimizes the
-    rest. `points` defaults to 0 = the FULL remaining passive budget (the usual intent — allocate the
-    whole tree); pass a positive number only to CAP allocation (faster, for an incremental tweak).
-    Ascendancy is a SEPARATE 8-point pool, auto-allocated on top regardless of `points`. Returns
-    chosen nodes with per-step gains and start/final per goal metric; `pointsRemaining` is the build's
-    TRUE unspent passive points. Bounded greedy search, not a global optimum.
+    rest — but only as far as the budget allows (it never over-allocates; skipped requires are
+    reported in `requireSkipped`). `reset=True` first deallocates the current tree (keeping
+    ascendancy) so you can RE-PLAN from scratch — e.g. `reset=True, require=[jewel socket ids]` to
+    rebuild the tree around jewel sockets instead of piling onto a full tree. `points` defaults to
+    0 = the FULL remaining passive budget (the usual intent — allocate the whole tree); pass a
+    positive number only to CAP allocation. Ascendancy is a SEPARATE 8-point pool, auto-allocated on
+    top regardless of `points`. Returns chosen nodes with per-step gains; `pointsRemaining` is the
+    build's TRUE unspent passive points. Bounded greedy search, not a global optimum.
     """
     return get_engine().optimize_passives(
         metric=metric,
@@ -701,6 +707,7 @@ def optimize_passives(
         candidates=candidates,
         goals=goals,
         require=require,
+        reset=reset,
     )
 
 
@@ -857,6 +864,93 @@ def plan_gear(
         slots=slots,
         auto_base=auto_base,
         min_ehp=min_ehp,
+    )
+
+
+@mcp.tool()
+def craft_item(
+    slot: str,
+    metric: str = "TotalDPS",
+    base: str | None = None,
+    goals: dict[str, float] | None = None,
+    rolls: str = "realistic",
+    rune_sockets: int = 2,
+    use_essences: bool = True,
+    use_corruption: bool = True,
+) -> dict[str, Any]:
+    """Craft the best-in-slot item using the FULL crafting system — beyond a plain rare.
+
+    Where `optimize_item` crafts the best rare from the standard affix pool, this adds the three real
+    PoE2 power sources, each valued on the engine (PoB owns the crafting data — nothing is invented):
+    **runes / soul cores** (mods socketed on top of the affixes), **essences** (force a mod — *Perfect*
+    essences grant mods the normal pool can't roll, e.g. % Life on body armour, "damage as extra" on
+    weapons), and **corruptions** (a corrupted implicit, e.g. +1 to all skills on an amulet). Pass a
+    single `metric` or a weighted `goals` blend; `rune_sockets` is how many the base is assumed to
+    support (Artificer's Orb — martial weapons/armour typically allow up to 2). Returns the item + the
+    `craftSteps` to make it (the corruption is a Vaal gamble — do it last). A theoretical best-in-slot
+    target with idealized rolls; price the steps. Read-only.
+    """
+    return craftopt.craft_item(
+        get_engine(),
+        slot,
+        metric=metric,
+        base=base,
+        goals=goals,
+        rolls=rolls,
+        rune_sockets=rune_sockets,
+        use_essences=use_essences,
+        use_corruption=use_corruption,
+    )
+
+
+@mcp.tool()
+def optimize_build(
+    metric: str = "TotalDPS",
+    min_ehp: float | None = 20000,
+    levers: list[str] | None = None,
+    tier: str = "Pinnacle",
+    passes: int = 2,
+    max_jewel_sockets: int = 3,
+    try_uniques: bool = False,
+    crafting: bool = False,
+    combat: dict[str, Any] | None = None,
+    archetypes: list[dict[str, Any]] | None = None,
+    parallel: bool = False,
+) -> dict[str, Any]:
+    """Assemble a complete, engine-verified, high-DPS build for the ACTIVE archetype — the holistic
+    optimizer that does the synthesis the greedy per-slot tools can't (STATE tool: leaves the best
+    build LOADED in the session).
+
+    Set up the archetype first (class + ascendancy + main skill, plus a weapon base for attack
+    skills — it's archetype-defining), then call this. It SEEDS the dominant levers from the reference
+    set for the build's delivery, and for each runs "commit-and-max": REQUIRE the lever's tree clusters
+    + nearest jewel sockets (the over-commitment greedy won't make), then maximize `metric` across
+    gear (plan_gear), jewels, supports and the weapon as a whole — iterating `passes` times — and keeps
+    the best build that caps resistances and meets `min_ehp`. Reports what it committed + the
+    reference-set placement so it's transparent.
+
+    `levers` forces explicit reference lever names (omit to auto-seed). `try_uniques` adds a unique-item
+    pass. `crafting` applies the FULL crafting system (runes + Perfect essences + corruption) to every
+    gear slot of the winner — the "awesome gear" boost (heavier; adds ~1-2 min). `archetypes` (list of
+    {class, ascendancy, skill, weapon}) also evaluates alternative configs and keeps the best — you
+    propose archetypes, the optimizer picks. `parallel` spreads the search across engine subprocesses
+    (faster, more memory). A heavy call (~1-3 min, more with crafting). The one thing it can't model is
+    energy-meta triggers (upstream PoB); run apply_combat_profile with the build's real conditions and
+    validate_build before presenting.
+    """
+    return buildopt.optimize_build(
+        get_engine(),
+        metric=metric,
+        min_ehp=min_ehp,
+        levers=levers,
+        tier=tier,
+        passes=passes,
+        max_jewel_sockets=max_jewel_sockets,
+        try_uniques=try_uniques,
+        crafting=crafting,
+        combat=combat,
+        archetypes=archetypes,
+        parallel=parallel,
     )
 
 

@@ -208,6 +208,11 @@ class PobEngine:
         """Batch-evaluate candidate items in a slot; returns each one's `keys` stats. Restores."""
         return self.call("eval_items", slot=slot, items=items, keys=keys)
 
+    def crafting_options(self, slot: str) -> dict[str, Any]:
+        """PoB's own crafting data (runes/soul cores, corrupted implicits, essence mods) applicable to
+        the item in `slot`, as ready item-text lines. Used by the crafting optimizer."""
+        return self.call("crafting_options", slot=slot)
+
     def search_passives(
         self, query: str = "", node_type: str | None = None, limit: int = 30
     ) -> dict[str, Any]:
@@ -225,11 +230,12 @@ class PobEngine:
     def optimize_passives(
         self,
         metric: str = "TotalDPS",
-        points: int = 3,
+        points: int = 0,
         node_type: str = "Notable",
         candidates: int = 50,
         goals: dict[str, float] | None = None,
         require: list[str | int] | None = None,
+        reset: bool = False,
     ) -> dict[str, Any]:
         return self.call(
             "optimize_passives",
@@ -239,6 +245,7 @@ class PobEngine:
             candidates=candidates,
             goals=goals,
             require=require,
+            reset=reset,
         )
 
     def get_xml(self) -> str:
