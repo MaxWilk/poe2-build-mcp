@@ -64,6 +64,20 @@ def test_data_refresh_reuses_unchanged_engine(tmp_path, monkeypatch):
     assert not any("engine.zip" in u for u in calls)  # unchanged engine not re-downloaded
 
 
+def test_shim_resolves_to_bundle_not_stale_user_data(tmp_path, monkeypatch):
+    # Regression (v0.1.39 field bug): the shim is OUR code and must match the Python that drives it.
+    # The engine self-update only refreshes the user-data PoB snapshot when the engine sha moves (a
+    # PoB bump), so a shim-only change (e.g. adding crafting_options) left a STALE user-data shim that
+    # shadowed the correct bundled one -> "unknown method: crafting_options". The bundled shim must win.
+    monkeypatch.setattr(paths, "user_data_dir", lambda: tmp_path)
+    stale = tmp_path / "pob" / "pob_headless.lua"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text("-- stale user-data shim, missing newer methods")
+    resolved = paths.pob_headless_script()
+    assert resolved == paths.BUNDLE_ROOT / "pob" / "pob_headless.lua"  # bundle wins
+    assert resolved != stale  # the stale user-data copy must NOT shadow it
+
+
 def test_check_for_updates_decouples_data_from_mcpb(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "user_data_dir", lambda: tmp_path)
     monkeypatch.setattr(update, "_bundle_version", lambda: "0.1.20")

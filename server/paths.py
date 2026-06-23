@@ -57,10 +57,18 @@ def pob_src_dir() -> Path:
 
 
 def pob_headless_script() -> Path:
-    return _prefer(
-        user_data_dir() / "pob" / "pob_headless.lua",
-        BUNDLE_ROOT / "pob" / "pob_headless.lua",
-    )
+    """Resolve the headless shim. UNLIKE the data paths, the shim is OUR code and must match the
+    Python that drives it — a method added on one side fails ("unknown method") if the other is
+    stale. Both ship together in the bundle/package, so the BUNDLED shim WINS; the user-data copy
+    (left by an older engine self-update) is only a fallback if the bundle somehow lacks it.
+
+    This prevents the version skew that broke v0.1.39 in the field: the Python self-updated to call
+    `crafting_options`, but the self-update refreshes the user-data PoB snapshot only when the engine
+    sha moves (a PoB bump), so a shim-only change left a stale user-data shim shadowing the correct
+    bundled one. Shim changes are code and ride the .mcpb, never a data-only refresh.
+    """
+    bundled = BUNDLE_ROOT / "pob" / "pob_headless.lua"
+    return bundled if bundled.exists() else user_data_dir() / "pob" / "pob_headless.lua"
 
 
 def bundled_luajit() -> Path | None:

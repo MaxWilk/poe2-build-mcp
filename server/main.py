@@ -844,6 +844,7 @@ def plan_gear(
     slots: list[str] | None = None,
     auto_base: bool = True,
     min_ehp: float | None = None,
+    metric: str = "TotalDPS",
 ) -> dict[str, Any]:
     """Plan a whole gear set that maximizes damage while capping resistances (budget allocation).
 
@@ -854,8 +855,9 @@ def plan_gear(
     armour/jewellery slots with a sensible attribute-appropriate base, so it builds a WHOLE set from
     scratch (weapons stay yours — they define the archetype). `min_ehp` sets a survivability floor:
     defensive slots are re-crafted toward pure EHP until TotalEHP reaches it (reports `ehpFloorMet`).
-    Returns the per-slot plan + projected whole-build DPS/EHP/resists; equip the items with
-    equip_item. A heavier call (~10-20s); greedy heuristic — refine individual slots with optimize_item.
+    `metric` is the offense stat to chase — use "FullDPS" for minion/DoT/trigger builds (whose
+    TotalDPS is ~0), else the default TotalDPS. Returns the per-slot plan + projected whole-build
+    DPS/EHP/resists; equip the items with equip_item. A heavier call (~10-20s); greedy heuristic.
     """
     return itemopt.plan_gear(
         get_engine(),
@@ -864,6 +866,7 @@ def plan_gear(
         slots=slots,
         auto_base=auto_base,
         min_ehp=min_ehp,
+        metric=metric,
     )
 
 
@@ -913,6 +916,8 @@ def optimize_build(
     max_jewel_sockets: int = 3,
     try_uniques: bool = False,
     crafting: bool = False,
+    uniques: list[str] | None = None,
+    converge: bool = False,
     combat: dict[str, Any] | None = None,
     archetypes: list[dict[str, Any]] | None = None,
     parallel: bool = False,
@@ -931,12 +936,14 @@ def optimize_build(
 
     `levers` forces explicit reference lever names (omit to auto-seed). `try_uniques` adds a unique-item
     pass. `crafting` applies the FULL crafting system (runes + Perfect essences + corruption) to every
-    gear slot of the winner — the "awesome gear" boost (heavier; adds ~1-2 min). `archetypes` (list of
-    {class, ascendancy, skill, weapon}) also evaluates alternative configs and keeps the best — you
-    propose archetypes, the optimizer picks. `parallel` spreads the search across engine subprocesses
-    (faster, more memory). A heavy call (~1-3 min, more with crafting). The one thing it can't model is
-    energy-meta triggers (upstream PoB); run apply_combat_profile with the build's real conditions and
-    validate_build before presenting.
+    gear slot of the winner — the "awesome gear" boost (heavier; adds ~1-2 min). `uniques` EQUIPS named
+    build-defining uniques and PRESERVES them (never recrafted); if one scales damage off an attribute
+    (e.g. Hand of Wisdom and Action → lightning per Intelligence) that attribute is auto-committed as a
+    lever, so the search builds the unique-enabled archetype (e.g. the Int-stack) the greedy can't find
+    on its own. `archetypes` (list of {class, ascendancy, skill, weapon}) also evaluates alternative
+    configs and keeps the best. `parallel` spreads the search across engine subprocesses (faster, more
+    memory). A heavy call (~1-3 min, more with crafting). The one thing it can't model is energy-meta
+    triggers (upstream PoB); run apply_combat_profile with the build's real conditions and validate_build.
     """
     return buildopt.optimize_build(
         get_engine(),
@@ -948,6 +955,8 @@ def optimize_build(
         max_jewel_sockets=max_jewel_sockets,
         try_uniques=try_uniques,
         crafting=crafting,
+        uniques=uniques,
+        converge=converge,
         combat=combat,
         archetypes=archetypes,
         parallel=parallel,

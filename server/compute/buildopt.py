@@ -21,6 +21,7 @@ reference-set placement so the choice is transparent, not a black box.
 from __future__ import annotations
 
 import concurrent.futures as cf
+import re
 from typing import Any
 
 from ..knowledge import db as corpus
@@ -88,11 +89,33 @@ def _attr_bias(engine: PobEngine) -> str:
     return max(by, key=lambda k: by[k])
 
 
+# Attribute levers — normally a dead stat for a build, but a unique-ENABLED archetype (e.g. Hand of
+# Wisdom and Action: "lightning per N Intelligence") turns an attribute INTO the damage multiplier.
+# Committing it stacks the attribute on tree+gear+jewels so the unique snowballs it into damage.
+_ATTR_LEVERS = {
+    "int": "Int",
+    "intelligence": "Int",
+    "str": "Str",
+    "strength": "Str",
+    "dex": "Dex",
+    "dexterity": "Dex",
+}
+_ATTR_TREE_QUERY = {"Int": "intelligence", "Str": "strength", "Dex": "dexterity"}
+
+
+def _attr_stat(lever: str | None) -> str | None:
+    """The engine attribute stat ('Int'/'Str'/'Dex') an attribute lever stacks, else None."""
+    return _ATTR_LEVERS.get(lever.lower()) if lever else None
+
+
 def _lever_tree_query(lever: str, damage_types: list[str]) -> str | None:
     """Map a reference `topLevers` name -> a passive-tree search query whose top notables we REQUIRE
     (the seed over-commitment). None = a gear/gem-driven lever (e.g. +levels) with no special tree
     cluster — handled by optimizing gear/supports for the metric (≈ the balanced pass)."""
     low = lever.lower()
+    attr = _attr_stat(lever)
+    if attr:
+        return _ATTR_TREE_QUERY[attr]  # stack the attribute's tree clusters (the bootstrap)
     if "crit" in low or "critical" in low:
         return "critical"
     if "attack speed" in low:
@@ -280,7 +303,7 @@ def _unique_pass(engine: PobEngine, metric: str, min_ehp: float | None) -> list[
 def commit_and_max(
     engine: PobEngine,
     snapshot: str,
-    lever: str | None,
+    levers: list[str],
     *,
     metric: str,
     min_ehp: float | None,
@@ -289,36 +312,65 @@ def commit_and_max(
     try_uniques: bool,
     damage_types: list[str],
     combat: dict[str, Any],
+    kept_slots: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """Build the version that maximally commits `lever` (None = balanced) across tree+gear+jewels+
-    supports, evaluated as the whole build. Starts fresh from `snapshot`; returns the metrics + the
-    build XML + what it committed. The over-commitment lives in REQUIRING the lever's tree clusters
-    (which greedy alone won't take) + filling jewel sockets — once those make the lever valuable, the
-    metric-greedy gear/jewels/supports pile onto it naturally, breaking the per-slot chicken-egg."""
+    """Build the version that maximally commits the lever SET `levers` (empty = balanced) across
+    tree+gear+jewels+supports, evaluated as the whole build. Starts fresh from `snapshot`. The
+    over-commitment lives in REQUIRING every lever's tree clusters AT ONCE (which greedy won't take)
+    + filling jewel sockets — so MULTIPLE multipliers (crit × attack-speed × penetration) compound
+    instead of just one, then the metric-greedy gear/jewels/supports pile on, breaking the chicken-egg.
+
+    A single ATTRIBUTE lever (Int/Str/Dex) is special: a unique-enabled archetype (e.g. HoWA: lightning
+    per Int) makes the attribute the damage multiplier, but the greedy won't bootstrap it. So we stack
+    the ATTRIBUTE itself on tree+gear+jewels — the equipped unique snowballs it into the real `metric`.
+    `kept_slots` are build-defining uniques NOT to recraft."""
     engine.load_build_xml(snapshot)
 
+    # A single attribute lever stacks the attribute itself; a damage stack uses the real metric and
+    # over-commits every lever's clusters together so they compound.
+    attr = _attr_stat(levers[0]) if len(levers) == 1 else None
+    gear_metric = attr or metric
+
     require: list[str | int] = []
-    tree_query = _lever_tree_query(lever, damage_types) if lever else None
-    if tree_query:
-        require += _require_tree_nodes(engine, tree_query)
+    seen_nodes: set[int] = set()
+    for lev in levers:
+        q = _lever_tree_query(lev, damage_types)
+        if not q:
+            continue
+        for nid in _require_tree_nodes(engine, q):
+            if nid not in seen_nodes:
+                seen_nodes.add(nid)
+                require.append(nid)
     require += _near_jewel_sockets(engine, max_jewel_sockets)
 
-    # When an EHP floor is set, the tree must carry some defence — gear alone caps ~10k EHP, short of
-    # a pinnacle ~20k. A light EHP weight makes the tree pick life/ES/resist clusters too (a real
-    # pinnacle build is hybrid, not a pure-DPS tree); pure DPS otherwise.
-    tree_goals = {"TotalDPS": 0.75, "TotalEHP": 0.25} if min_ehp else None
+    # Tree goals: an attribute lever STACKS the attribute (the bootstrap the greedy won't climb); else
+    # DPS, with a light EHP weight when a floor is set so the tree carries some defence (pinnacle ~20k).
+    if attr:
+        tree_goals: dict[str, float] | None = (
+            {attr: 0.7, "TotalEHP": 0.3} if min_ehp else {attr: 1.0}
+        )
+    else:
+        tree_goals = {"TotalDPS": 0.75, "TotalEHP": 0.25} if min_ehp else None
     tree = engine.optimize_passives(
         metric=metric, points=0, reset=True, require=require or None, goals=tree_goals
     )
     engine.set_config(options=combat)
 
+    gear_slots = (
+        [s for s in (*_CRAFT_OFFENSE, *_CRAFT_DEFENSE) if s not in kept_slots]
+        if kept_slots
+        else None
+    )
     jewel_base = _JEWEL_BASE.get(_attr_bias(engine), "Diamond")
     jewels = 0
     for _ in range(max(1, passes)):
-        plan = itemopt.plan_gear(engine, dps_weight=0.85, min_ehp=min_ehp)
+        plan = itemopt.plan_gear(
+            engine, dps_weight=0.85, min_ehp=min_ehp, metric=gear_metric, slots=gear_slots
+        )
         _equip_plan(engine, plan.get("plan") or [])
-        _craft_weapon(engine, metric)
-        jewels = _fill_jewels(engine, metric, jewel_base)
+        if "Weapon 1" not in kept_slots:
+            _craft_weapon(engine, metric)  # weapon chases the REAL metric (its flat damage matters)
+        jewels = _fill_jewels(engine, gear_metric, jewel_base)
         _apply_supports(engine, metric)
 
     uniques: list[dict[str, Any]] = []
@@ -326,7 +378,7 @@ def commit_and_max(
         uniques = _unique_pass(engine, metric, min_ehp)
 
     res = _result(engine, metric, min_ehp)
-    res["lever"] = lever or "balanced"
+    res["lever"] = " + ".join(levers) if levers else "balanced"
     res["treeRequired"] = require
     res["jewelsSocketed"] = jewels
     res["uniquesEquipped"] = uniques
@@ -355,25 +407,25 @@ def _setup_archetype(engine: PobEngine, base: str, arch: dict[str, Any]) -> str 
 def _run_levers(
     engine: PobEngine,
     snapshot: str,
-    levers: list[str | None],
+    lever_sets: list[list[str]],
     *,
     parallel: bool,
     max_workers: int,
     **kw: Any,
 ) -> list[dict[str, Any]]:
-    """Run commit_and_max for each lever. Sequential by default; with `parallel`, spread the levers
-    across a small pool of independent engine subprocesses (each used by exactly one thread, so the
-    sync stdio stays safe). The engine bottleneck is one subprocess, so this is the real speedup."""
-    if not parallel or len(levers) <= 1:
-        return [commit_and_max(engine, snapshot, lev, **kw) for lev in levers]
+    """Run commit_and_max for each lever SET (a set commits several levers together). Sequential by
+    default; with `parallel`, spread the sets across a small pool of independent engine subprocesses
+    (each used by exactly one thread, so the sync stdio stays safe) — the real speedup."""
+    if not parallel or len(lever_sets) <= 1:
+        return [commit_and_max(engine, snapshot, ls, **kw) for ls in lever_sets]
 
-    n = min(max(2, max_workers), len(levers))
+    n = min(max(2, max_workers), len(lever_sets))
     extras = [PobEngine(script=engine.script) for _ in range(n - 1)]
     engines = [engine, *extras]
-    chunks: list[list[str | None]] = [levers[i::n] for i in range(n)]
+    chunks: list[list[list[str]]] = [lever_sets[i::n] for i in range(n)]
 
-    def work(eng: PobEngine, chunk: list[str | None]) -> list[dict[str, Any]]:
-        return [commit_and_max(eng, snapshot, lev, **kw) for lev in chunk]
+    def work(eng: PobEngine, chunk: list[list[str]]) -> list[dict[str, Any]]:
+        return [commit_and_max(eng, snapshot, ls, **kw) for ls in chunk]
 
     try:
         with cf.ThreadPoolExecutor(max_workers=n) as ex:
@@ -396,16 +448,70 @@ def _resists_capped(engine: PobEngine) -> bool:
     return all((missing.get(e) or 0) <= 0 for e in _RES_KEYS)
 
 
-def _craft_gear(engine: PobEngine, metric: str) -> list[dict[str, Any]]:
+def _converge(
+    engine: PobEngine,
+    require: list[str | int] | None,
+    *,
+    metric: str,
+    min_ehp: float | None,
+    combat: dict[str, Any],
+    kept_slots: tuple[str, ...] = (),
+    passes: int = 2,
+) -> dict[str, Any]:
+    """Post-craft convergence — the fix for multipliers that bootstrap each other but get committed at
+    DIFFERENT stages. Crafting reveals crit MULTI, but the tree was planned BEFORE crafting, so crit
+    CHANCE never got committed (it stays low, the multi is wasted). And crit chance has its OWN
+    bootstrap inside the tree — a crit wheel is many small nodes, each marginal until most of it is
+    allocated — so a free re-plan won't climb it. So when we see high multi + low chance, we FORCE the
+    crit clusters (+ re-craft so the weapon supplies local crit, + crit jewels/supports), re-measure,
+    and keep only a strict constraint-satisfying gain. Verified to roughly DOUBLE a from-scratch
+    Lightning Spear (the wasted 4.36x multi at 32.7% chance). Build is left LOADED at the best."""
+    tree_goals = {"TotalDPS": 0.75, "TotalEHP": 0.25} if min_ehp else None
+    jewel_base = _JEWEL_BASE.get(_attr_bias(engine), "Diamond")
+    base_require = list(require or [])
+    best_xml = engine.get_xml()
+    best_res = _result(engine, metric, min_ehp)
+    for _ in range(max(1, passes)):
+        s = engine.get_stats(["CritChance", "CritMultiplier"]).get("stats") or {}
+        # the dominant attack/spell under-stack: a big crit MULTI sitting on a low crit CHANCE.
+        extra: list[str | int] = []
+        if (s.get("CritMultiplier") or 0) >= 2.5 and (s.get("CritChance") or 0) < 80:
+            extra = [
+                n for n in _require_tree_nodes(engine, "critical", top=3) if n not in base_require
+            ]
+        if not extra:
+            break  # nothing under-stacked left to force
+        engine.optimize_passives(
+            metric=metric, points=0, reset=True, require=base_require + extra, goals=tree_goals
+        )
+        engine.set_config(options=combat)
+        _craft_gear(
+            engine, metric, kept_slots
+        )  # re-craft: the weapon now supplies local crit chance
+        _fill_jewels(engine, metric, jewel_base)
+        _apply_supports(engine, metric)
+        res = _result(engine, metric, min_ehp)
+        if res["score"] > best_res["score"] and res["constraintsMet"] >= best_res["constraintsMet"]:
+            best_res, best_xml, base_require = res, engine.get_xml(), base_require + extra
+        else:
+            break
+    engine.load_build_xml(best_xml)
+    return best_res
+
+
+def _craft_gear(
+    engine: PobEngine, metric: str, kept_slots: tuple[str, ...] = ()
+) -> list[dict[str, Any]]:
     """'Awesome gear' post-pass: re-craft every equipped gear slot with the FULL crafting system
     (runes + Perfect essences + corruption). Each slot keeps a resist/EHP weight (offense damage-heavy,
     defense EHP-heavy) so it doesn't strip its resistances, then a re-cap pass restores any cross-slot
-    resist balance the per-slot crafting disturbed. Crafted on the live build so gains compound. Heavy."""
+    resist balance the per-slot crafting disturbed. Crafted on the live build so gains compound. Heavy.
+    `kept_slots` (build-defining uniques) are left untouched — never recrafted into a rare."""
     gear = engine.get_build().get("gear") or {}
     craftable = [
         s
         for s, cur in gear.items()
-        if isinstance(cur, dict) and cur.get("base") and "Jewel" not in s
+        if isinstance(cur, dict) and cur.get("base") and "Jewel" not in s and s not in kept_slots
     ]
     crafted: dict[str, dict[str, Any]] = {}
 
@@ -455,6 +561,8 @@ def optimize_build(
     max_jewel_sockets: int = 3,
     try_uniques: bool = False,
     crafting: bool = False,
+    uniques: list[str] | None = None,
+    converge: bool = False,
     combat: dict[str, Any] | None = None,
     archetypes: list[dict[str, Any]] | None = None,
     parallel: bool = False,
@@ -465,9 +573,12 @@ def optimize_build(
 
     `levers` auto-seeds from the reference set for the build's delivery when omitted; pass explicit
     reference lever names to force the search. `min_ehp` is the EHP floor (hard constraint, with
-    resists-capped). `try_uniques` adds the v2 unique pass. `archetypes` (v3) evaluates alternative
-    class/skill/weapon configs too and keeps the best — the LLM proposes archetypes, the optimizer
-    picks. `parallel` spreads the lever search across engine subprocesses. See the module docstring.
+    resists-capped). `try_uniques` adds the v2 unique pass. `uniques` EQUIPS named build-defining
+    uniques and PRESERVES them (never recrafted) — and if one scales damage off an attribute (e.g.
+    HoWA: "per N Intelligence"), that attribute is auto-added as a lever so the search stacks it (a
+    unique-enabled archetype the greedy can't otherwise reach). `archetypes` (v3) evaluates alternative
+    class/skill/weapon configs too and keeps the best. `parallel` spreads the search across engine
+    subprocesses. See the module docstring.
     """
     b = engine.get_build()
     skill = str(b.get("mainSkill") or "")
@@ -494,17 +605,58 @@ def optimize_build(
             "archetype-defining, so the optimizer won't pick it). Spell skills don't need one.",
         }
 
+    # Minions / DoT / triggers deal damage the player doesn't "hit" for — TotalDPS reads ~0 while
+    # FullDPS carries it. Optimizing the default TotalDPS would then optimize ZERO (a silent 0-DPS
+    # build), so auto-switch to FullDPS when that's the real damage signal.
+    metric_note: str | None = None
+    if metric == "TotalDPS":
+        bare = engine.get_stats(["TotalDPS", "FullDPS"]).get("stats") or {}
+        if (bare.get("TotalDPS") or 0) < 1 and (bare.get("FullDPS") or 0) > 1:
+            metric = "FullDPS"
+            metric_note = (
+                "auto-switched to metric=FullDPS (TotalDPS ~0 — a minion/DoT/trigger skill)"
+            )
+
+    # Equip + PRESERVE build-defining uniques, and auto-seed the attribute lever any of them ENABLES
+    # (e.g. HoWA scales lightning off Intelligence → stack Int). Kept slots are never recrafted.
+    kept_list: list[str] = []
+    auto_levers: list[str] = []
+    for name in uniques or []:
+        full = corpus.get_unique(name)
+        if not full or not full.get("text"):
+            continue
+        itype = str(full.get("item_type") or "").lower()
+        uslot = next((s for key, s in _UNIQUE_SLOTS.items() if key in itype), None)
+        if not uslot:
+            continue
+        engine.add_item(_unique_item_text(full), slot=uslot)
+        kept_list.append(uslot)
+        for attr_word in ("intelligence", "strength", "dexterity"):
+            if re.search(rf"per\s+\d+\s+{attr_word}", str(full["text"]), re.I):
+                auto_levers.append(attr_word)  # unique-enabled attribute archetype
+    kept_slots = tuple(dict.fromkeys(kept_list))
+
     seeded = list(levers) if levers is not None else refbuilds.archetype_levers(delivery)
-    # Candidate set: the balanced build (no forced lever) + each seeded lever. Dedup by tree-query so
-    # two levers that commit the same cluster (e.g. "crit damage" / "crit chance") don't both run.
-    candidates: list[str | None] = [None]
-    seen_q: set[str | None] = set()
+    seeded += [lv for lv in auto_levers if lv not in seeded]
+    # Dedup seeded levers by tree-query (so "crit damage"/"crit chance" don't both run) and split
+    # damage levers from attribute levers (attribute levers need their own attribute-stacking gear).
+    damage_lv: list[str] = []
+    attr_lv: list[str] = []
+    seen_q: set[str] = set()
     for lev in seeded:
         q = _lever_tree_query(lev, damage_types)
         if q is None or q in seen_q:
             continue  # gear/gem-driven (≈ balanced) or duplicate cluster — skip the redundant run
         seen_q.add(q)
-        candidates.append(lev)
+        (attr_lv if _attr_stat(lev) else damage_lv).append(lev)
+
+    # Candidate SETS: balanced; each single damage lever; the STACKED set (all damage levers committed
+    # together so their multipliers compound — the multi-lever commit); and each attribute lever solo.
+    candidates: list[list[str]] = [[]]
+    candidates += [[lv] for lv in damage_lv]
+    if len(damage_lv) >= 2:
+        candidates.append(list(damage_lv))  # the multi-lever stack
+    candidates += [[lv] for lv in attr_lv]
 
     profile = combat or {"enemyIsBoss": tier, "conditionFullEnergyShield": True}
     snapshot = engine.get_xml()
@@ -516,6 +668,7 @@ def optimize_build(
         try_uniques=try_uniques,
         damage_types=damage_types,
         combat=profile,
+        kept_slots=kept_slots,
     )
 
     results = _run_levers(
@@ -548,10 +701,28 @@ def optimize_build(
     # 'Awesome gear' post-pass: apply the full crafting system to the winner's gear, then re-measure.
     crafted_gear: list[dict[str, Any]] = []
     if crafting:
-        crafted_gear = _craft_gear(engine, metric)
+        crafted_gear = _craft_gear(engine, metric, kept_slots)
         post = _result(engine, metric, min_ehp)
-        for k in ("TotalDPS", "FullDPS", "TotalEHP", "resistsCapped", "ehpFloorMet"):
+        for k in ("TotalDPS", "FullDPS", "TotalEHP", "resistsCapped", "ehpFloorMet", "score"):
             best[k] = post[k]
+
+    # Convergence: re-plan tree + jewels + supports on the (crafted) winner so synergistic multipliers
+    # the earlier stages couldn't bootstrap (crit CHANCE once crafting supplied crit MULTI) get stacked.
+    converged = False
+    if converge:
+        before = best.get("score") or 0
+        c = _converge(
+            engine,
+            best.get("treeRequired") or None,
+            metric=metric,
+            min_ehp=min_ehp,
+            combat=profile,
+            kept_slots=kept_slots,
+        )
+        if (c.get("score") or 0) > before:
+            converged = True
+            for k in ("TotalDPS", "FullDPS", "TotalEHP", "resistsCapped", "ehpFloorMet", "score"):
+                best[k] = c[k]
 
     bench = refbuilds.benchmark(
         best.get("TotalDPS"), best.get("FullDPS"), best.get("TotalEHP"), delivery
@@ -570,6 +741,7 @@ def optimize_build(
     return {
         "ok": True,
         "metric": metric,
+        "metricNote": metric_note,
         "committed": best.get("lever"),
         "committedArchetype": best.get("archetype"),
         "result": {
@@ -580,7 +752,9 @@ def optimize_build(
             "ehpFloorMet": best.get("ehpFloorMet"),
             "jewelsSocketed": best.get("jewelsSocketed"),
             "uniquesEquipped": best.get("uniquesEquipped") or [],
+            "uniquesKept": list(uniques or []),
             "craftedGear": crafted_gear,
+            "converged": converged,
         },
         "constraints": {"minEHP": min_ehp, "resistsCapped": True, "satisfied": bool(satisfying)},
         "leverResults": sorted(

@@ -588,6 +588,7 @@ def plan_gear(
     slots: list[str] | None = None,
     auto_base: bool = True,
     min_ehp: float | None = None,
+    metric: str = "TotalDPS",
 ) -> dict[str, Any]:
     """Plan a whole gear set that maximizes damage while capping resists (budget-allocation heuristic).
 
@@ -604,12 +605,14 @@ def plan_gear(
     per-slot plan + projected whole-build DPS/EHP/resists; equip the items yourself. Greedy heuristic.
     """
     dps_weight = min(max(float(dps_weight), 0.0), 1.0)
+    # `metric` is the offense stat to chase (TotalDPS for hits; FullDPS for minion/DoT/trigger builds,
+    # whose TotalDPS is ~0). Substituted into the goal weights so the whole plan optimizes real damage.
     off_goal = (
-        {"TotalDPS": dps_weight, "TotalEHP": round(1.0 - dps_weight, 3)}
+        {metric: dps_weight, "TotalEHP": round(1.0 - dps_weight, 3)}
         if dps_weight < 1.0
-        else {"TotalDPS": 1.0}
+        else {metric: 1.0}
     )
-    def_goal = {"TotalEHP": 0.8, "TotalDPS": 0.2}
+    def_goal = {"TotalEHP": 0.8, metric: 0.2}
     order = list(slots) if slots else list(_OFFENSE_SLOTS) + list(_DEFENSE_SLOTS)
     gear = engine.get_build().get("gear") or {}
 

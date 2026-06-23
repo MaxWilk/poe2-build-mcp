@@ -938,6 +938,18 @@ def test_buildopt_lever_mapping():
     assert buildopt._lever_tree_query("+N to Level of all Skills", ["fire"]) is None
 
 
+def test_buildopt_attribute_lever():
+    # Unique-enabled archetypes: an attribute (Int/Str/Dex) is a commit-able lever that stacks the
+    # attribute's tree clusters (so a unique like HoWA can snowball it into damage).
+    assert buildopt._attr_stat("intelligence") == "Int"
+    assert buildopt._attr_stat("int") == "Int"
+    assert buildopt._attr_stat("strength") == "Str"
+    assert buildopt._attr_stat("dex") == "Dex"
+    assert buildopt._attr_stat("crit") is None and buildopt._attr_stat(None) is None
+    assert buildopt._lever_tree_query("intelligence", ["lightning"]) == "intelligence"
+    assert buildopt._lever_tree_query("dexterity", []) == "dexterity"
+
+
 def test_buildopt_unique_item_text():
     # The corpus `text` leads with name/base (and maybe a League line); the builder must not
     # duplicate them into the mod block, and must drop the League line.

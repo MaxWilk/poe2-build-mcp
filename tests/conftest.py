@@ -14,7 +14,35 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
+from server.compute import engine as _engine_mod  # noqa: E402
 from server.compute.engine import PobEngine  # noqa: E402
+
+# Engine-backed tests need the LuaJIT binary + PoB. CI/release install it; the scheduled data-refresh
+# job (rebuilds the corpus but NOT the engine — it uses dev-branch PoB for fresh data, which would
+# drift golden values) does not. So when LuaJIT is absent, SKIP the engine tests instead of erroring,
+# letting that job still gate on the corpus/knowledge/pipeline tests it actually validates.
+_DIRECT_ENGINE_TESTS = {
+    "test_blank_luajit_override_is_ignored",
+    "test_engine_health_reports_versions",
+}
+
+
+def _luajit_available() -> bool:
+    try:
+        _engine_mod._find_luajit()
+        return True
+    except Exception:  # noqa: BLE001 — FileNotFoundError when no binary on PATH/bundle
+        return False
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if _luajit_available():
+        return
+    skip = pytest.mark.skip(reason="LuaJIT/PoB engine unavailable (e.g. data-refresh CI)")
+    for item in items:
+        needs_engine = bool({"engine", "fireball"} & set(getattr(item, "fixturenames", ())))
+        if needs_engine or item.name in _DIRECT_ENGINE_TESTS:
+            item.add_marker(skip)
 
 
 @pytest.fixture(scope="session")
