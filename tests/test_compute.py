@@ -194,6 +194,16 @@ def test_eval_items_batches_and_restores(engine):
     assert engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
 
 
+def test_paste_skill_surfaces_unrecognized_gems(engine):
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    r = engine.paste_skill("Spark 20/20  1\nTotally Fake Support 20/20  1")
+    # the unknown support must be REPORTED, not silently dropped (probes would read as "worth 0")
+    assert any("Totally Fake Support" in s for s in r.get("unrecognized", []))
+    assert r.get("warning")
+
+
 def test_optimize_passives_weighted_goals(engine):
     engine.new_build()
     engine.set_class("Sorceress", "Stormweaver")

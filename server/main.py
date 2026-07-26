@@ -271,8 +271,10 @@ def set_skill(skill: str) -> dict[str, Any]:
     a bare support name gets a default level/quality (supports are fixed-effect
     in PoE2, so it's cosmetic). This REPLACES the current main skill group; auras/heralds/reservation buffs
     added via `add_skill_group` are separate groups and are preserved. If nothing parses (or the main
-    gem name isn't a real skill) the build is left UNCHANGED and `ok:false` is returned — it won't
-    silently drop supports or corrupt the skill. Returns updated stats, plus `ProjectileCount` + a
+    gem name isn't a real skill) the build is left UNCHANGED and `ok:false` is returned. A support
+    the engine's data doesn't know (e.g. league-new gems) is dropped by PoB's parser — when that
+    happens the result carries `unrecognized` + a `warning`; treat such a probe as NOT MEASURED,
+    never as "that gem is worth 0". Returns updated stats, plus `ProjectileCount` + a
     `dpsNote` for multi-projectile skills. For persistent buffs, use `add_skill_group`.
     """
     return _flag_meta_trigger(get_engine().paste_skill(skill), _gem_names_in(skill))
