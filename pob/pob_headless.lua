@@ -458,6 +458,20 @@ function methods.paste_skill(p)
 	return statResult(p.keys)
 end
 
+-- Batch-evaluate many MAIN-skill link variants, returning each one's stats in a single
+-- round-trip. Mirrors eval_items. Restores the original build after.
+function methods.eval_links(p)
+	assert(p and type(p.texts) == "table", "eval_links requires params.texts (list of paste texts)")
+	local master = build:SaveDB("code")
+	local out = {}
+	for i, text in ipairs(p.texts) do
+		out[i] = methods.paste_skill({ text = text, keys = p.keys })
+	end
+	loadBuildFromXML(master)
+	runCallback("OnFrame")
+	return { results = out, restored = true }
+end
+
 -- Add an ENABLED secondary socket group (an aura/herald/reservation buff, or a second
 -- skill) WITHOUT changing the main skill, so its buff/reservation applies to the active build.
 -- This is how caster damage layers (auras, reservation/mana-scaling buffs) get modelled.

@@ -194,6 +194,26 @@ def test_eval_items_batches_and_restores(engine):
     assert engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
 
 
+def test_eval_links_batches_and_restores(engine):
+    engine.new_build()
+    engine.set_class("Sorceress", "Stormweaver")
+    engine.set_level(90)
+    engine.add_item("Rarity: Rare\nW\nDueling Wand\n100% increased Spell Damage")
+    engine.paste_skill("Spark 20/20  1")
+    base = engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"]
+    res = engine.eval_links(
+        [
+            "Spark 20/20  1\nControlled Destruction 20/20  1",
+            "Spark 20/20  1",
+        ],
+        keys=["TotalDPS"],
+    )["results"]
+    # each row is a full paste_skill result; the supported variant must out-damage the bare one
+    assert res[0]["stats"]["TotalDPS"] > res[1]["stats"]["TotalDPS"] > 0
+    # build restored to the original link, not the last variant
+    assert engine.get_stats(["TotalDPS"])["stats"]["TotalDPS"] == pytest.approx(base, rel=1e-6)
+
+
 def test_optimize_passives_weighted_goals(engine):
     engine.new_build()
     engine.set_class("Sorceress", "Stormweaver")
