@@ -9,7 +9,7 @@ git submodule pinned to the commit below.
 |-------|-------|
 | Repo | https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2 |
 | Branch | `dev` |
-| Pinned commit | `a82a33b` (2026-06-13, "Merge branch 'master' into dev") |
+| Pinned commit | `99bc6e1` (2026-07-24, "Release 0.23.0 (#2395)") |
 | License | MIT |
 | Game data | passive tree version `0_5` |
 

@@ -271,11 +271,44 @@ def set_skill(skill: str) -> dict[str, Any]:
     a bare support name gets a default level/quality (supports are fixed-effect
     in PoE2, so it's cosmetic). This REPLACES the current main skill group; auras/heralds/reservation buffs
     added via `add_skill_group` are separate groups and are preserved. If nothing parses (or the main
-    gem name isn't a real skill) the build is left UNCHANGED and `ok:false` is returned — it won't
-    silently drop supports or corrupt the skill. Returns updated stats, plus `ProjectileCount` + a
+    gem name isn't a real skill) the build is left UNCHANGED and `ok:false` is returned. A support
+    the engine's data doesn't know (e.g. league-new gems) is dropped by PoB's parser — when that
+    happens the result carries `unrecognized` + a `warning`; treat such a probe as NOT MEASURED,
+    never as "that gem is worth 0". Returns updated stats, plus `ProjectileCount` + a
     `dpsNote` for multi-projectile skills. For persistent buffs, use `add_skill_group`.
+    For sweeping many link variants, use `probe_links` (one round-trip).
     """
     return _flag_meta_trigger(get_engine().paste_skill(skill), _gem_names_in(skill))
+
+
+@mcp.tool()
+def probe_links(links: list[str], keys: list[str] | None = None) -> dict[str, Any]:
+    """Batch-A/B many MAIN-skill link variants in ONE call — the support-sweep tool.
+
+    Each entry in `links` is a full set_skill paste string ("<Skill> lvl/q 1 / Support A /
+    Support B / ..."). Every variant is applied, its stats captured, and the ORIGINAL build is
+    restored at the end — one round-trip instead of N set_skill calls (a 15-variant support
+    sweep drops from minutes of tool calls to one). `keys` optionally narrows the stats
+    returned per variant (default: the standard stat block).
+
+    Each result may carry `unrecognized` + `warning` when a gem was silently dropped because
+    the engine's PoB data doesn't know it (e.g. league-new gems) — treat those variants as
+    NOT MEASURED rather than "worth 0". Compare variants against each other, not against the
+    live build (which is restored untouched).
+    """
+    return get_engine().eval_links(links, keys=keys)
+
+
+@mcp.tool()
+def probe_items(slot: str, items: list[str], keys: list[str] | None = None) -> dict[str, Any]:
+    """Batch-A/B many candidate item texts in one SLOT in ONE call — the gear-sweep tool.
+
+    Each entry in `items` is full item text (same format as equip_item's `raw`). Every candidate
+    is equipped in `slot`, its stats captured, and the original item restored at the end — one
+    round-trip instead of N equip_item calls. A candidate that fails to parse returns `false`
+    in its position. `keys` narrows the returned stats (default TotalDPS).
+    """
+    return get_engine().eval_items(slot, items, keys=keys)
 
 
 @mcp.tool()

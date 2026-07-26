@@ -152,6 +152,12 @@ class PobEngine:
     def paste_skill(self, text: str) -> dict[str, Any]:
         return self.call("paste_skill", text=normalize_skill_text(text))
 
+    def eval_links(self, texts: list[str], keys: list[str] | None = None) -> dict[str, Any]:
+        """Batch-evaluate main-skill link variants; returns each one's stats. Restores after."""
+        return self.call(
+            "eval_links", texts=[normalize_skill_text(t) for t in texts], keys=keys
+        )
+
     def add_skill_group(self, text: str, include_in_full_dps: bool = False) -> dict[str, Any]:
         return self.call(
             "add_skill_group",

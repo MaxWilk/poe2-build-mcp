@@ -400,6 +400,57 @@ function methods.load_build_xml(p)
 	return { mainSkill = mainSkillName(), stats = collectStats(p.keys) }
 end
 
+-- Extract the gem names a paste text is asking for (one gem per line after normalization;
+-- trailing "level/quality count" numerics are stripped). Used to detect silently-dropped gems.
+local function requestedGemNames(text)
+	local names = {}
+	for line in tostring(text):gmatch("[^\n]+") do
+		line = line:match("^%s*(.-)%s*$")
+		local name = line:match("^(.-)%s+%d[%d/%s]*$") or line
+		name = name:match("^%s*(.-)%s*$")
+		if name ~= "" then
+			table.insert(names, name)
+		end
+	end
+	return names
+end
+
+-- Names actually present in a socket group (whether or not PoB resolved them to gem data).
+local function groupGemNames(sg)
+	local present = {}
+	if sg and sg.gemList then
+		for _, g in ipairs(sg.gemList) do
+			local n = g.nameSpec or (g.gemData and g.gemData.name)
+			if n and n ~= "" then
+				present[n:lower()] = true
+			end
+		end
+	end
+	return present
+end
+
+-- Any requested gem that didn't make it into the group — or entered it as an INERT entry
+-- (nameSpec kept but no resolved gemData) — was effectively dropped by PoB's paste parser
+-- (typically: the gem doesn't exist in this engine's data, e.g. league content the pinned
+-- PoB predates). Surfacing this list prevents "probe says 0 because the gem vanished".
+local function findUnrecognized(text, sg)
+	local missing = {}
+	local present = groupGemNames(sg)
+	for _, want in ipairs(requestedGemNames(text)) do
+		if not present[want:lower()] then
+			table.insert(missing, want)
+		end
+	end
+	if sg and sg.gemList then
+		for _, g in ipairs(sg.gemList) do
+			if g.nameSpec and g.nameSpec ~= "" and not g.gemData then
+				table.insert(missing, g.nameSpec .. " (in group but unresolved)")
+			end
+		end
+	end
+	return missing
+end
+
 -- Set the build's MAIN skill from PoB's paste format ("<Gem> 20/0  1", one gem per line). This
 -- REPLACES the current main socket group (auras/buffs added via add_skill_group are separate groups
 -- and are preserved) so repeated calls don't pile up stale groups. On a parse failure it rolls the
@@ -455,7 +506,32 @@ function methods.paste_skill(p)
 			mainSkill = mainSkillName(),
 		}
 	end
-	return statResult(p.keys)
+	local r = statResult(p.keys)
+	-- Report gems the paste parser silently dropped (unknown to this engine's data) — otherwise a
+	-- probe reads as "this gem is worth 0" when the truth is "this gem never entered the link".
+	local missing = findUnrecognized(normalizeSkillText(p.text), list[newIndex])
+	if #missing > 0 then
+		r.unrecognized = missing
+		r.warning = "DROPPED (unknown to engine data): "
+			.. table.concat(missing, ", ")
+			.. " — the stats above do NOT include these gems. The engine's PoB data may predate "
+			.. "them (league content); do not read this result as 'the gem is worth 0'."
+	end
+	return r
+end
+
+-- Batch-evaluate many MAIN-skill link variants, returning each one's stats (and any dropped
+-- gems) in a single round-trip. Mirrors eval_items. Restores the original build after.
+function methods.eval_links(p)
+	assert(p and type(p.texts) == "table", "eval_links requires params.texts (list of paste texts)")
+	local master = build:SaveDB("code")
+	local out = {}
+	for i, text in ipairs(p.texts) do
+		out[i] = methods.paste_skill({ text = text, keys = p.keys })
+	end
+	loadBuildFromXML(master)
+	runCallback("OnFrame")
+	return { results = out, restored = true }
 end
 
 -- Add an ENABLED secondary socket group (an aura/herald/reservation buff, or a second
