@@ -279,6 +279,32 @@ def set_skill(skill: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+def probe_links(links: list[str], keys: list[str] | None = None) -> dict[str, Any]:
+    """Batch-A/B many MAIN-skill link variants in ONE call — the support-sweep tool.
+
+    Each entry in `links` is a full set_skill paste string ("<Skill> lvl/q 1 / Support A /
+    Support B / ..."). Every variant is applied, its stats captured, and the ORIGINAL build is
+    restored at the end — one round-trip instead of N set_skill calls (a 15-variant support
+    sweep drops from minutes of tool calls to one). `keys` optionally narrows the stats
+    returned per variant (default: the standard stat block). Compare variants against each
+    other, not against the live build (which is restored untouched).
+    """
+    return get_engine().eval_links(links, keys=keys)
+
+
+@mcp.tool()
+def probe_items(slot: str, items: list[str], keys: list[str] | None = None) -> dict[str, Any]:
+    """Batch-A/B many candidate item texts in one SLOT in ONE call — the gear-sweep tool.
+
+    Each entry in `items` is full item text (same format as equip_item's `raw`). Every candidate
+    is equipped in `slot`, its stats captured, and the original item restored at the end — one
+    round-trip instead of N equip_item calls. A candidate that fails to parse returns `false`
+    in its position. `keys` narrows the returned stats (default TotalDPS).
+    """
+    return get_engine().eval_items(slot, items, keys=keys)
+
+
+@mcp.tool()
 def add_skill_group(skill: str, in_full_dps: bool = False) -> dict[str, Any]:
     """Add an ENABLED secondary skill group (aura, herald, or persistent buff) WITHOUT changing
     the main skill — so its buff/reservation applies to the active build.
