@@ -3,7 +3,7 @@
 Builds a known character in the engine, serializes it to PoB XML, runs it through the
 import-code codec (the user-paste path), reloads it, and checks the stats are identical.
 
-Run from the repo root:  python scripts/smoke_import.py
+Run from the repo root:  uv run python scripts/smoke_import.py
 """
 
 from __future__ import annotations
@@ -11,10 +11,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from compute.engine import PobEngine  # noqa: E402
-from compute.pob_code import decode_code, encode_code  # noqa: E402
+from server.compute.engine import PobEngine  # noqa: E402
+from server.compute.pob_code import decode_code, encode_code  # noqa: E402
 
 
 def main() -> int:
