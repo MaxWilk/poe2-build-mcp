@@ -65,7 +65,7 @@ engine confirms the effect.
 
 **Stay current**: live currency/unique prices, corpus freshness checks, and one-click self-update.
 
-### The toolset (64 MCP tools)
+### The toolset (65 MCP tools)
 
 *Build / compute — real Path of Building numbers:*
 - `import_build(source)` — PoB share code, pobb.in/pastebin link, or raw XML
@@ -74,6 +74,7 @@ engine confirms the effect.
 - `get_defenses()` — resists (+over-cap), EHP, and the active resistance-penalty assumption
 - `set_class(class, ascendancy?)` · `set_level(level)` · `set_skill(skill)` · `set_config(…)`
 - `add_skill_group(skill)` — add an aura/herald/buff (e.g. Archmage) that buffs the build without replacing the main skill
+- `set_main_skill_group(index)` — make an existing imported group the main skill (by index from `get_build().skillGroups`) without re-pasting it — e.g. switch to a minion pack so `Minion.TotalDPS` is computed
 - `equip_item(raw)` · `unequip_item(slot)` · `list_config_options(query?)`
 - `list_jewel_sockets()` / `equip_jewel(raw, socket?)` — list tree jewel sockets / socket a jewel
 - `apply_combat_profile(tier, …)` — switch on a realistic boss-fight profile (shock/curse/charges) in one call

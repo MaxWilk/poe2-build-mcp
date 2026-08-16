@@ -1066,3 +1066,60 @@ def test_craft_item_beats_plain_rare(engine):
     assert (crafted["metricCrafted"] or 0) >= (plain["metricAfter"] or 0)
     c = crafted["crafting"]
     assert c["runes"] or c["essencesUsed"] or c["corruptedImplicit"]  # crafting actually engaged
+
+
+def test_minion_stats_exposed_via_dotted_keys(engine):
+    # PoB computes minions into a SEPARATE actor table (mainOutput.Minion); the shim must surface it
+    # as dotted keys instead of dropping it, and must not misreport a minion build as an uncomputable
+    # buff-only 0 DPS.
+    engine.new_build()
+    engine.set_class("Witch", "Lich")
+    engine.set_level(90)
+    engine.paste_skill("Skeletal Arsonist 20/0  1")
+    r = engine.get_stats()
+    assert (r["stats"].get("TotalDPS") or 0) == 0  # player-facing DPS is 0 by design
+    assert r["stats"]["Minion.TotalDPS"] > 0  # in the default summary when a minion actor exists
+    assert not r.get("warning")  # computable build: no false "buff/reservation" diagnostic
+    assert "Minion.TotalDPS" in (r.get("dpsNote") or "")
+    more = engine.get_stats(["Minion.TotalDPS", "Minion.Life", "Minion.Nope", "Nope.Nope"])["stats"]
+    assert more["Minion.TotalDPS"] == pytest.approx(r["stats"]["Minion.TotalDPS"])
+    assert more["Minion.Life"] > 0
+    assert "Minion.Nope" not in more and "Nope.Nope" not in more  # unknown keys are simply absent
+    # the optimizer can drive the minion metric (would be a no-op on TotalDPS == 0)
+    opt = engine.optimize_passives(metric="Minion.TotalDPS", points=6)
+    assert opt["finalValue"] > opt["startValue"] > 0
+    # non-minion builds are unchanged: no Minion.* key, no note
+    engine.paste_skill("Fireball 20/0  1")
+    r2 = engine.get_stats()
+    assert "Minion.TotalDPS" not in r2["stats"] and not r2.get("dpsNote")
+
+
+def test_set_main_skill_group_switches_without_repaste(engine):
+    # An imported build often has several groups (caster + minion pack); PoB only computes the minion
+    # actor for the CURRENT main group, so we need to switch by index, keeping the gems as imported.
+    engine.new_build()
+    engine.set_class("Witch", "Lich")
+    engine.set_level(90)
+    engine.paste_skill("Fireball 20/0  1")
+    engine.add_skill_group("Skeletal Arsonist 20/0  1\nFeeding Frenzy II 20/0  1")
+    b = engine.get_build()
+    groups = b["skillGroups"]
+    assert len(groups) == b["skillGroupCount"] == 2
+    assert [g["index"] for g in groups] == [1, 2]
+    fire = next(g for g in groups if "Fireball" in g["gems"])
+    arson = next(g for g in groups if "Skeletal Arsonist" in g["gems"])
+    assert fire["isMain"] and not arson["isMain"] and b["mainSkillGroupIndex"] == fire["index"]
+    assert "Feeding Frenzy II" in arson["gems"]  # imported supports retained
+    r = engine.set_main_skill_group(arson["index"])
+    assert r["ok"] and r["mainSkillGroupIndex"] == arson["index"]
+    assert r["mainSkill"] == "Skeletal Arsonist Minion" and "Skeletal Arsonist" in r["gems"]
+    assert r["stats"]["Minion.TotalDPS"] > 0 and (r["stats"].get("TotalDPS") or 0) == 0
+    assert engine.get_build()["mainSkillGroupIndex"] == arson["index"]
+    # switch back: player DPS returns, minion actor gone
+    r = engine.set_main_skill_group(fire["index"])
+    assert r["ok"] and r["mainSkill"] == "Fireball" and r["stats"]["TotalDPS"] > 0
+    assert "Minion.TotalDPS" not in r["stats"]
+    # out-of-range: refused, build untouched, group list returned so the caller can pick again
+    bad = engine.set_main_skill_group(99)
+    assert bad["ok"] is False and "1..2" in bad["error"] and len(bad["skillGroups"]) == 2
+    assert engine.get_build()["mainSkill"] == "Fireball"

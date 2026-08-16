@@ -191,6 +191,12 @@ def get_build_stats(keys: list[str] | None = None) -> dict[str, Any]:
 
     Pass `keys` to request specific stats (e.g. ["TotalDPS", "Life", "EnergyShield"]);
     omit it for a default summary. Every value is computed by the real PoB engine.
+
+    Minion builds: PoB computes minions as a separate actor, so the player-facing TotalDPS
+    is 0 by design and the minions' damage is `Minion.TotalDPS` (in the default summary when
+    the main skill has a minion; any minion stat is reachable as `Minion.<Stat>`, e.g.
+    `Minion.CombinedDPS`, `Minion.Life`). Use "Minion.TotalDPS" as the `metric` for the
+    optimizer/lever tools on such builds.
     """
     return get_engine().get_stats(keys)
 
@@ -199,9 +205,10 @@ def get_build_stats(keys: list[str] | None = None) -> dict[str, Any]:
 def get_build() -> dict[str, Any]:
     """Full read-back of the active build.
 
-    Returns class/level/ascendancy, the main skill group (gems + levels), allocated
-    notables/keystones/ascendancy nodes, equipped gear by slot, passive points used, and
-    summary stats — so you can see the whole build you've assembled.
+    Returns class/level/ascendancy, the main skill group (gems + levels), ALL skill groups as
+    `skillGroups` (index, gem names, enabled, includeInFullDPS, isMain — pick one with
+    `set_main_skill_group`), allocated notables/keystones/ascendancy nodes, equipped gear by slot,
+    passive points used, and summary stats — so you can see the whole build you've assembled.
     """
     build = get_engine().get_build()
     names = (
@@ -296,6 +303,25 @@ def add_skill_group(skill: str, in_full_dps: bool = False) -> dict[str, Any]:
     return _flag_meta_trigger(
         get_engine().add_skill_group(skill, include_in_full_dps=in_full_dps), _gem_names_in(skill)
     )
+
+
+@mcp.tool()
+def set_main_skill_group(index: int) -> dict[str, Any]:
+    """Make one of the build's EXISTING skill groups the main skill, by 1-based index — without
+    re-pasting it (gems, levels and quality stay exactly as imported).
+
+    Use after `import_build` when the build has several damage groups and the saved main isn't the
+    one you want to analyze — e.g. a Lich whose PoB export has a caster skill as main but whose real
+    damage is a minion pack: PoB computes the minion actor (and so `Minion.TotalDPS`) ONLY for the
+    current main group. Find the index in `get_build().skillGroups` (each entry lists its gems,
+    `enabled`, `includeInFullDPS`, `isMain`). A disabled group is enabled when selected (reported in
+    `note`). Returns `ok`, `mainSkillGroupIndex`, `gems`, `mainSkill`, updated engine stats, and the
+    usual `warning`/`dpsNote`; `ok:false` + the group list if the index is out of range.
+    Data source: engine.
+    """
+    r = get_engine().set_main_skill_group(index)
+    names = r.get("gems") if isinstance(r, dict) else None
+    return _flag_meta_trigger(r, list(names) if isinstance(names, list) else [])
 
 
 @mcp.tool()

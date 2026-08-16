@@ -57,14 +57,39 @@ local DEFAULT_STATS = {
 	"TotalDPS", "FullDPS", "CombinedDPS", "AverageDamage", "Speed", "HitChance",
 	"CritChance", "CritMultiplier", "ManaCost", "Life", "Mana", "EnergyShield",
 	"TotalEHP", "Ward", "Armour", "Evasion", "Str", "Dex", "Int", "ProjectileCount",
+	-- Minion actor: PoB computes minions into a SEPARATE output table (mainOutput.Minion, see
+	-- CalcPerform.lua `output.Minion = {}` / `env.minion.output = output.Minion`), so a minion build's
+	-- player-facing TotalDPS is 0 by design. Only present when the main skill has a minion.
+	"Minion.TotalDPS",
 }
+
+-- Read a stat from an output table. A plain key is a flat lookup; a dotted key ("Minion.TotalDPS")
+-- walks into a nested actor table (mainOutput.Minion.TotalDPS). Flat wins if both exist. Returns
+-- nil when any step is missing, so callers can't confuse "no minion" with 0.
+local function outputValue(out, key)
+	if type(out) ~= "table" then
+		return nil
+	end
+	local flat = out[key]
+	if flat ~= nil then
+		return flat
+	end
+	local v = out
+	for part in tostring(key):gmatch("[^%.]+") do
+		if type(v) ~= "table" then
+			return nil
+		end
+		v = v[part]
+	end
+	return v
+end
 
 local function collectStats(keys)
 	local out = (build.calcsTab and build.calcsTab.mainOutput) or {}
 	local res = {}
 	local list = (type(keys) == "table") and keys or DEFAULT_STATS
 	for _, k in ipairs(list) do
-		local v = out[k]
+		local v = outputValue(out, k)
 		local t = type(v)
 		if t == "number" or t == "string" or t == "boolean" then
 			res[k] = v
@@ -157,6 +182,11 @@ local function damageDiagnostic()
 	if dps > 0 then
 		return nil
 	end
+	-- A minion build IS computable: its damage lives in the minion actor's output (Minion.TotalDPS),
+	-- not the player's. Don't misreport it as an uncomputable/buff-only 0; dpsNoteFor points at it.
+	if (tonumber(outputValue(out, "Minion.TotalDPS")) or 0) > 0 then
+		return nil
+	end
 	local isDamage = hasType(ge, "Damage") or hasType(ge, "DamageOverTime")
 	-- explicitly undamageable minions (e.g. the ravens) — engine can't credit player-facing DPS
 	if hasType(ge, "MinionsAreUndamagable") then
@@ -222,6 +252,16 @@ local function dpsNoteFor(out)
 	local total = tonumber(out.TotalDPS) or 0
 	local full = tonumber(out.FullDPS) or 0
 	local proj = tonumber(out.ProjectileCount) or 0
+	local minion = tonumber(outputValue(out, "Minion.TotalDPS")) or 0
+	if total <= 0 and minion > 0 then
+		return "This is a MINION build: PoB computes the minions as a separate actor, so the player-facing "
+			.. "TotalDPS is 0 by design. The minions' damage is Minion.TotalDPS ("
+			.. math.floor(minion + 0.5)
+			.. ", PoB's per-minion 'Total DPS' figure — request other minion stats as Minion.<Stat>). "
+			.. "FullDPS rolls minion DPS in only for groups flagged 'Include in Full DPS'. Use "
+			.. "\"Minion.TotalDPS\" as the metric for solve_for / rank_levers / optimize_* — the default "
+			.. "TotalDPS would optimize against 0."
+	end
 	if total > 0 and full > total * 1.05 then
 		return "FullDPS ("
 			.. math.floor(full + 0.5)
@@ -287,6 +327,42 @@ local function selectMainSocketGroup(index)
 	build.buildFlag = true
 	build.modFlag = true
 	runCallback("OnFrame")
+end
+
+-- Gem names of a socket group (nameSpec, else the granted effect's name for item-granted gems).
+local function groupGemNames(sg)
+	local names = {}
+	for _, g in ipairs((sg and sg.gemList) or {}) do
+		local nm = g.nameSpec
+		if (not nm or nm == "") and g.gemData and g.gemData.grantedEffect then
+			nm = g.gemData.grantedEffect.name
+		end
+		if nm and nm ~= "" then
+			names[#names + 1] = nm
+		end
+	end
+	return names
+end
+
+-- Compact per-group summary so a caller can pick a group by index (set_main_socket_group): an
+-- imported build often has several damage groups (e.g. a caster skill AND a minion pack) and PoB
+-- only computes the minion actor for the CURRENT main group.
+local function summarizeSkillGroups()
+	local list = build.skillsTab.socketGroupList or {}
+	local mainIdx = build.mainSocketGroup or 1
+	local groups = {}
+	for i, sg in ipairs(list) do
+		groups[i] = {
+			index = i,
+			gems = groupGemNames(sg),
+			enabled = sg.enabled and true or false,
+			includeInFullDPS = sg.includeInFullDPS and true or false,
+			isMain = (i == mainIdx),
+			slot = sg.slot,
+			source = sg.source,
+		}
+	end
+	return groups
 end
 
 -- ---------------------------------------------------------------------------
@@ -480,9 +556,39 @@ function methods.add_skill_group(p)
 	return statResult(p.keys)
 end
 
+-- Make an EXISTING socket group the main skill (by 1-based index; see get_build().skillGroups).
+-- Unlike paste_skill this keeps the group's gems/levels/quality exactly as imported. Validates the
+-- index so a typo can't point `mainSocketGroup` at nothing and silently zero the build.
 function methods.set_main_socket_group(p)
-	selectMainSocketGroup(p and p.index or 1)
-	return statResult(p and p.keys)
+	p = p or {}
+	local list = build.skillsTab.socketGroupList or {}
+	local idx = tonumber(p.index)
+	if not idx or idx < 1 or idx > #list or idx ~= math.floor(idx) then
+		return {
+			ok = false,
+			error = "set_main_socket_group: index must be an integer 1.." .. #list
+				.. " (got " .. tostring(p.index) .. "). See get_build().skillGroups.",
+			mainSkill = mainSkillName(),
+			mainSkillGroupIndex = build.mainSocketGroup or 1,
+			skillGroups = summarizeSkillGroups(),
+		}
+	end
+	local sg = list[idx]
+	local wasDisabled = not sg.enabled
+	if wasDisabled then
+		-- A disabled group computes nothing; enable it so making it main has an effect (reported).
+		sg.enabled = true
+	end
+	selectMainSocketGroup(idx)
+	local r = statResult(p.keys)
+	r.ok = true
+	if wasDisabled then
+		r.note = "Group " .. idx .. " was disabled in the import; it has been ENABLED to make it the main skill."
+	end
+	r.mainSkillGroupIndex = idx
+	r.gems = groupGemNames(sg)
+	r.includeInFullDPS = sg.includeInFullDPS and true or false
+	return r
 end
 
 function methods.get_stats(p)
@@ -893,6 +999,8 @@ function methods.get_build()
 		ascendancyPointsUsed = ascUsed,
 		ascendancyPointsMax = ASCENDANCY_POINT_MAX,
 		skillGroupCount = #(build.skillsTab.socketGroupList or {}),
+		mainSkillGroupIndex = build.mainSocketGroup or 1,
+		skillGroups = summarizeSkillGroups(),
 		stats = collectStats(),
 	}
 	-- The ascendancy pool is capped at 8 in PoE2; an over-allocated tree is illegal in game.
@@ -1226,7 +1334,7 @@ function methods.optimize_passives(p)
 	end
 	local startVals = {}
 	for _, m in ipairs(reportKeys) do
-		startVals[m] = (mo0[m]) or 0
+		startVals[m] = outputValue(mo0, m) or 0
 	end
 
 	-- `require`: allocate the named nodes (+ shortest path) before optimizing. This RE-PLANS the tree
@@ -1268,8 +1376,8 @@ function methods.optimize_passives(p)
 		if goals then
 			local g = 0
 			for m, w in pairs(goals) do
-				local b = (calcBase[m]) or 0
-				local v = (out[m]) or 0
+				local b = outputValue(calcBase, m) or 0
+				local v = outputValue(out, m) or 0
 				if b > 0 then
 					g = g + w * (v - b) / b
 				else
@@ -1278,7 +1386,7 @@ function methods.optimize_passives(p)
 			end
 			return g
 		end
-		return ((out[metric]) or 0) - ((calcBase[metric]) or 0)
+		return (outputValue(out, metric) or 0) - (outputValue(calcBase, metric) or 0)
 	end
 
 	-- One greedy pass over a single node type until nothing helps or the budget runs out.
@@ -1397,7 +1505,7 @@ function methods.optimize_passives(p)
 	-- start/final for every reported metric
 	local metricsOut = {}
 	for _, m in ipairs(reportKeys) do
-		metricsOut[m] = { start = startVals[m], final = (mo1[m]) or startVals[m] }
+		metricsOut[m] = { start = startVals[m], final = outputValue(mo1, m) or startVals[m] }
 	end
 	result.metrics = metricsOut
 	-- back-compat fields
@@ -1406,7 +1514,7 @@ function methods.optimize_passives(p)
 		result.startEHP, result.finalEHP = startVals.TotalEHP, (mo1.TotalEHP) or startVals.TotalEHP
 	elseif not goals then
 		result.startValue = startVals[metric]
-		result.finalValue = (mo1[metric]) or startVals[metric]
+		result.finalValue = outputValue(mo1, metric) or startVals[metric]
 	end
 	return result
 end

@@ -34,6 +34,7 @@
     { "name": "get_build_stats", "description": "PoB-computed stats for the active build." },
     { "name": "set_skill", "description": "Set the active build's main skill." },
     { "name": "add_skill_group", "description": "Add an enabled aura/herald/buff (e.g. Archmage) without changing the main skill." },
+    { "name": "set_main_skill_group", "description": "Make an existing skill group the main skill by index (from get_build().skillGroups) without re-pasting it — e.g. a minion pack so Minion.TotalDPS is computed." },
     { "name": "new_build", "description": "Reset to a blank build (clear gear/skills/passives/config)." },
     { "name": "set_class", "description": "Set character class + ascendancy from scratch." },
     { "name": "set_level", "description": "Set character level (1-100)." },

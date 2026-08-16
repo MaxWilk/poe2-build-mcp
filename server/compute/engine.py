@@ -159,6 +159,10 @@ class PobEngine:
             includeInFullDPS=include_in_full_dps,
         )
 
+    def set_main_skill_group(self, index: int) -> dict[str, Any]:
+        """Make an existing socket group (1-based index) the main skill without re-pasting it."""
+        return self.call("set_main_socket_group", index=index)
+
     def list_jewel_sockets(self) -> dict[str, Any]:
         return self.call("list_jewel_sockets")
 
